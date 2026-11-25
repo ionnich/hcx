@@ -53,11 +53,15 @@ After any of these, run `scripts/status`, then the smoke test.
   `session.new_layer`, `client.action`, `block.close`, `session.set_*_label`.
 - **herdr-core / Herdr app** (update themselves). `hc update` keeps agents running. Check the
   changelog for changes to `hc ls --json`, `hc get --json` (`argv`, `labels`, `status`,
-  `foreground`), `hc attach`, `hc events`: hcx parses them.
+  `foreground`, `name`, `parent`), `HC_TERMINAL_ID`, `hc attach`, `hc events`: hcx and the omp
+  extensions parse them.
 - **omp**. Check `title.*` and `terminal.programStatus` settings, `--resume`/`--restore`/
-  `--continue`, and that `~/.omp/agent/extensions/hc-notes.ts` still loads (a startup warning
-  names any extension that fails). The extension uses `pi.on("input")`,
-  `pi.sendMessage`, `pi.registerMessageRenderer`, and `Container`/`Text` from `@oh-my-pi/pi-tui`.
+  `--continue`, and that the three extensions in `~/.omp/agent/extensions/hc-*.ts` still load
+  (a startup warning names any extension that fails). They use `pi.on("input" | "tool_call" |
+  "session_start" | "session_switch" | "session_branch")`, `pi.sendMessage`,
+  `pi.registerMessageRenderer`, `pi.setSessionName`, the `{ block, reason }` tool-call result, and
+  `Container`/`Text` from `@oh-my-pi/pi-tui`. hc-name relies on a name set by an extension
+  stopping the title generator (`titleSource === "user"`).
 - **hc-tui**: see operations.md, "Bump hc-tui".
 
 ## Smoke test (5 minutes)

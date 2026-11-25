@@ -1,6 +1,10 @@
 # Changelog
 
 ## 2026-11-26
+- omp extensions `hc-name` (`ompName`) and `hc-guard` (`ompGuard`), both on by default. hc-name
+  names an hc agent's session after its terminal, which also stops omp's title generator
+  renaming it (Heeler showed generated titles). hc-guard refuses the herdr CLI, `hc kill/rm/
+  interrupt` of terminals the agent didn't start, and `hc server stop/restart`.
 - omp extension `hc-notes` (module option `ompNotes`, on by default): messages hc delivers
   between agents (`<hc from="…">…</hc>`) show as a card with the sender's name instead of raw
   tags. The model still gets the original text.

@@ -36,6 +36,8 @@
 | `skill` | true | true | true | `~/.agents/skills/hc/SKILL.md` |
 | `rexActions` | true | true | true | `~/.config/rex/hcx.lua` (only loaded where `init.lua` dofiles it) |
 | `ompNotes` | true | true | true | `~/.omp/agent/extensions/hc-notes.ts`: hc messages drawn as cards |
+| `ompName` | true | true | true | `~/.omp/agent/extensions/hc-name.ts`: session named after its hc terminal |
+| `ompGuard` | true | true | true | `~/.omp/agent/extensions/hc-guard.ts`: no herdr CLI, no killing other agents |
 | `guardRexAutostart` | false | false | **true** | `REX_AUTOSTART=0` in fish |
 
 launchd jobs: `org.nixos.hcx` (every 60 s, log `/tmp/hcx_<user>.log`), `org.nixos.herdr-app`,

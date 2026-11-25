@@ -35,9 +35,12 @@ fi
 step "Nix syntax"
 for f in flake.nix nix/*.nix; do nix-instantiate --parse "$f" >/dev/null || bad "$f"; done
 
-step "omp extension parses (hc-notes.ts)"
+step "omp extensions parse; hc-guard decisions"
 if command -v bun >/dev/null; then
-  bun build --target=bun --external '@oh-my-pi/*' omp/hc-notes.ts >/dev/null || bad omp/hc-notes.ts
+  for f in omp/hc-notes.ts omp/hc-name.ts omp/hc-guard.ts; do
+    bun build --target=bun --external '@oh-my-pi/*' "$f" >/dev/null || bad "$f"
+  done
+  bun test ./omp/hc-guard.test.ts >/dev/null 2>&1 || bad "omp/hc-guard.test.ts (run: bun test ./omp/hc-guard.test.ts)"
 else
   echo "bun not installed; skipped"
 fi

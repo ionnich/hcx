@@ -60,6 +60,16 @@ in
       The model still gets the original text.
     '';
 
+    ompName = bool true ''
+      Install the hc-name omp extension: an omp in an hc terminal names its session after the
+      terminal (what Heeler, hc-tui and omp's status line show), which also stops omp renaming it.
+    '';
+
+    ompGuard = bool true ''
+      Install the hc-guard omp extension: an omp in an hc terminal can't run the herdr CLI, kill,
+      remove or interrupt terminals it didn't start, or stop/restart the hc server.
+    '';
+
     guardRexAutostart = bool false ''
       Set REX_AUTOSTART=0 in fish, so an ssh:// Rex client can never start a second Rex server
       outside the login session (for a Mac whose Rex.app owns the server).
@@ -98,6 +108,8 @@ in
         home.file.".agents/skills/hc/SKILL.md" = mkIf cfg.skill { source = ../skills/hc/SKILL.md; };
         xdg.configFile."rex/hcx.lua" = mkIf cfg.rexActions { source = ../rex/hcx.lua; };
         home.file.".omp/agent/extensions/hc-notes.ts" = mkIf cfg.ompNotes { source = ../omp/hc-notes.ts; };
+        home.file.".omp/agent/extensions/hc-name.ts" = mkIf cfg.ompName { source = ../omp/hc-name.ts; };
+        home.file.".omp/agent/extensions/hc-guard.ts" = mkIf cfg.ompGuard { source = ../omp/hc-guard.ts; };
         xdg.configFile."fish/conf.d/rex-autostart.fish" = mkIf cfg.guardRexAutostart {
           text = ''
             # From the hcx module: Rex.app owns this Mac's Rex server; never let an ssh:// client

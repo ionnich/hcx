@@ -10,8 +10,9 @@ hc-tui in a terminal, the Herdr app, Rex, and Heeler on the phone. hcx is the gl
   same conversation. The Mac you sit at also gets a `board` tab listing every agent on every Mac.
 - **Drives agents from Rex.** Palette actions to jump to an agent, read its output, message
   it, answer it when it's blocked, start a new one, or float hc-tui over any window.
-- **Makes agent-to-agent messages readable.** An omp extension draws the `<hc from="…">`
-  messages agents send each other as a small card.
+- **Makes agents behave in hc.** omp extensions draw the `<hc from="…">` messages agents send
+  each other as a small card, name each session after its terminal (so Heeler and hc-tui show
+  `scaleup-lead`, not a generated title), and refuse the herdr CLI and killing other agents.
 - **Moves agents off Herdr TUI** with their conversations intact (`hcx-migrate-herdr`).
 
 Agents never live in Rex or any other UI, so any UI can be closed, restarted, swapped or
@@ -87,6 +88,6 @@ dofile(os.getenv("HOME") .. "/.config/rex/hcx.lua")
 | `scripts/hcx-migrate-herdr` | move one agent off Herdr TUI |
 | `scripts/check`, `scripts/rollout`, `scripts/status` | maintenance (see docs/maintenance.md) |
 | `rex/hcx.lua` | Rex palette actions and keys |
-| `omp/hc-notes.ts` | omp extension that renders hc messages |
+| `omp/hc-notes.ts`, `omp/hc-name.ts`, `omp/hc-guard.ts` | omp extensions: render hc messages, name sessions after their terminal, guard other agents |
 | `skills/hc/SKILL.md` | the `hc` agent skill |
 | `nix/module.nix`, `nix/packages.nix`, `flake.nix` | the nix-darwin module and packages |

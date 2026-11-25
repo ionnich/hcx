@@ -19,6 +19,8 @@ replaced without touching an agent.
 | **hc-tui** (`ionnich/hc-tui` fork) | each Mac, any terminal; `hc-tui --remote HOST` over ssh | TUI over hc: sidebar, tabs, splits, herdr keys | this repo's package (pinned release) |
 | **`hc` skill** (`skills/hc/SKILL.md`) | `~/.agents/skills/hc` on each Mac | Teaches omp to use hc (and stop using the herdr CLI) | this repo, via the module |
 | **hc-notes** (`omp/hc-notes.ts`) | `~/.omp/agent/extensions` on each Mac; loaded by every omp | Draws `<hc from="…">` messages as a card; the model still gets the original text | this repo, via the module |
+| **hc-name** (`omp/hc-name.ts`) | same | Names an hc agent's omp session after its terminal; a name set this way stops omp's title generator renaming it | this repo, via the module |
+| **hc-guard** (`omp/hc-guard.ts`) | same | Refuses, from an hc agent's bash tool: the herdr CLI; `hc kill/rm/interrupt` of terminals it didn't start (hc `parent`); `hc server stop/restart` | this repo, via the module |
 | **Heeler + Host Helper** | phone; helper on the Studio | Notifications, Chat, starting agents from the phone | Heeler app |
 
 The MacBook's core has the Studio added (`hc machine add studio`), so `hc ls` there lists both

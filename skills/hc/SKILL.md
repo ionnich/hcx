@@ -32,3 +32,6 @@ are your children and end when you end, unless started with `--outlive-parent`.
   when it exits.
 - Every agent here gets a Rex view automatically (this Mac's Rex `agents` session, a tab per
   space); don't open more Rex views for agents.
+- You may `hc kill`, `hc rm` or `hc interrupt` only terminals you started (their `parent` in
+  `hc get X --json` is your `$HC_TERMINAL_ID`). Reach any other agent with `hc send`; ask the
+  user to stop it. The `herdr` CLI and `hc server stop/restart` are refused here too.
