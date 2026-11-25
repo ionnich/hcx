@@ -76,6 +76,8 @@ dofile(os.getenv("HOME") .. "/.config/rex/hcx.lua")
 - [Maintenance](docs/maintenance.md): check / rollout / status scripts, tested versions,
   upgrading each component, the smoke test, adding a Mac.
 - [Migrating from Herdr TUI](docs/migrating-from-herdr.md): moving live agents and teams.
+- [The Herdr app, our way](docs/herdr-app.md): Ghostty's Everforest look and a Normal mode with
+  a space leader, as a theme and a mod (no fork).
 - [Troubleshooting](docs/troubleshooting.md): known failure modes and their fixes.
 - [Decisions](docs/decisions.md): why it's built this way, with the evidence.
 - [Changelog](CHANGELOG.md)
@@ -89,5 +91,6 @@ dofile(os.getenv("HOME") .. "/.config/rex/hcx.lua")
 | `scripts/check`, `scripts/rollout`, `scripts/status`, `scripts/omp-canary` | maintenance (see docs/maintenance.md) |
 | `rex/hcx.lua` | Rex palette actions and keys |
 | `omp/hc-notes.ts`, `omp/hc-name.ts`, `omp/hc-guard.ts` | omp extensions: render hc messages, name sessions after their terminal, guard other agents |
+| `herdr/` | Herdr app theme (`themes/`), mods (`mods/vim`), and `herdr/apply` to put them in place |
 | `skills/hc/SKILL.md` | the `hc` agent skill |
 | `nix/module.nix`, `nix/packages.nix`, `flake.nix` | the nix-darwin module and packages |
