@@ -26,7 +26,7 @@ How to keep the hybrid setup healthy over time. Day-to-day commands are in
 | Migration inventories | `~/.local/state/hcx/migrations/` on the Studio | what each moved agent left behind |
 | Herdr app look and mods | this repo, `herdr/` | `herdr/apply` links them into `~/.config/herdr-app` (docs/herdr-app.md) |
 | orbitals (board + omp extension) | `~/code/orbitals` on the Studio (github.com/ionnich/orbitals, `master`) | extension linked as `~/.omp/agent/extensions/orbitals.ts` |
-| ghwatch (GitHub watching) | `~/code/ghwatch` (github.com/ionnich/ghwatch, private) | Studio only. Extension: the one-line `~/.omp/agent/extensions/ghwatch.ts` from `ghwatch shim`; identities in `~/.config/ghwatch/config.json`; daemon started on demand by the first omp (token: the agents' `GITHUB_TOKEN` via `gh auth token`); state in `~/.local/state/ghwatch`. Update: `git pull`, `bun bin/ghwatch.ts stop`, then each agent `/restart`s. |
+| ghwatch (GitHub watching) | `~/code/ghwatch` (github.com/ionnich/ghwatch, private) | Studio only. Extension: the one-line `~/.omp/agent/extensions/ghwatch.ts` from `ghwatch shim`; skill: `~/.agents/skills/ghwatch` → `~/code/ghwatch/skills/ghwatch`; identities in `~/.config/ghwatch/config.json`; daemon started on demand by the first omp (token: the agents' `GITHUB_TOKEN` via `gh auth token`); state in `~/.local/state/ghwatch`. Update: `git pull`, `bun bin/ghwatch.ts stop`, then each agent `/restart`s. |
 
 **The Studio's system config is shared.** Other agents (the `nix` session) and you also run
 `nixup` there. A build from a checkout or generation without `services.hcx` drops `hcx`,
