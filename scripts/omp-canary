@@ -1,0 +1,216 @@
+#!/usr/bin/env bash
+# scripts/omp-canary VERSION [--on HOST] [--keep]
+#
+# Try an omp release against our omp plugins before agents get it. Downloads that release's
+# binary into a temp folder (checksum-verified), runs it in a throwaway hc terminal with a
+# made-up name on this Mac's real ~/.omp/agent (so every installed extension loads as it would
+# for an agent), and checks each plugin:
+#
+#   load          no "Failed to load extension" for any extension in ~/.omp/agent/extensions
+#   hc-notes      an <hc from="…"> message draws as a card (no raw tags on screen)
+#   hc-name       the session is named after the terminal (title_change, source user)
+#   hc-guard      `herdr ls` from the agent's bash tool is refused
+#   restart       /restart re-execs in place on the same session (how agents pick up plugins)
+#   orbitals      the orbitals test suite, and a real `ask` answered through the board
+#   ghwatch       the GitHub-watch plugin's tests (once ~/code/omp-ghwatch exists)
+#
+# Prints PASS / FAIL / SKIP per check and exits non-zero if anything failed. Uses a few small
+# model turns (set CANARY_MODEL to pick the model, e.g. anthropic/claude-haiku-4-5). Cleans up
+# its terminal, session files and temp folder unless --keep.
+#
+#   scripts/omp-canary 19.2.1               on this Mac
+#   scripts/omp-canary 19.2.1 --on studio   on the Studio (runs this script there over ssh)
+set -uo pipefail
+
+usage() { sed -n '2,24p' "$0" | sed 's/^# \{0,1\}//'; exit 2; }
+[ $# -ge 1 ] || usage
+VERSION=${1#v}; shift
+ON=""; KEEP=0
+while [ $# -gt 0 ]; do
+  case $1 in
+    --on) ON=$2; shift 2 ;;
+    --keep) KEEP=1; shift ;;
+    *) usage ;;
+  esac
+done
+
+if [ -n "$ON" ]; then
+  # The other Mac's ssh shell may not have ~/.local/bin or Homebrew on PATH (the Studio's fish).
+  exec ssh -o BatchMode=yes "$ON" "PATH=\$HOME/.local/bin:/run/current-system/sw/bin:/etc/profiles/per-user/\$USER/bin:/opt/homebrew/bin:/usr/bin:/bin CANARY_MODEL='${CANARY_MODEL:-}' bash ~/code/hcx/scripts/omp-canary '$VERSION' $([ $KEEP = 1 ] && echo --keep)"
+fi
+
+HC=${HC:-$HOME/.local/bin/hc}
+EXT=$HOME/.omp/agent/extensions
+NAME="omp-canary-$RANDOM"
+TMP=$(mktemp -d /tmp/omp-canary.XXXXXX)
+WORK="$TMP/work"; mkdir -p "$WORK"
+WORK=$(cd "$WORK" && pwd -P)
+declare -a RESULTS=()
+FAILED=0
+
+note() { printf '  %s\n' "$*"; }
+result() { # result CHECK PASS|FAIL|SKIP DETAIL
+  RESULTS+=("$(printf '%-10s %-5s %s' "$1" "$2" "$3")")
+  [ "$2" = FAIL ] && FAILED=1
+  printf '%-10s %-5s %s\n' "$1" "$2" "$3"
+}
+screen() { "$HC" read "$NAME" --lines "${1:-200}" 2>/dev/null; }
+state() { "$HC" get "$NAME" --json 2>/dev/null | jq -r '(.status|objects|.state) // "-"'; }
+# until_screen REGEX SECONDS: wait for the agent's screen to match.
+until_screen() {
+  local end=$(( $(date +%s) + $2 ))
+  while [ "$(date +%s)" -lt "$end" ]; do screen 400 | grep -qE "$1" && return 0; sleep 2; done
+  return 1
+}
+# until_idle SECONDS: wait until the agent finished its turn.
+until_idle() {
+  local end=$(( $(date +%s) + $1 )) s
+  sleep 3
+  while [ "$(date +%s)" -lt "$end" ]; do
+    s=$(state); { [ "$s" = idle ] || [ "$s" = done ]; } && return 0; sleep 2
+  done
+  return 1
+}
+session_file() {
+  # omp records the cwd as given (/tmp/…), not resolved (/private/tmp/…): match the folder name.
+  grep -l "\"cwd\":\"[^\"]*$(basename "$TMP")/work\"" $(find "$HOME/.omp/agent/sessions" -name '*.jsonl' -newer "$TMP/started" 2>/dev/null) 2>/dev/null | head -1
+}
+
+cleanup() {
+  [ "$KEEP" = 1 ] && { echo "kept: terminal $NAME, $TMP"; return; }
+  "$HC" kill "$NAME" >/dev/null 2>&1; sleep 1
+  for a in $("$HC" ls --all --json 2>/dev/null | jq -r --arg n "$NAME" '.terminals[] | select(.name == $n) | .address'); do
+    "$HC" rm "$a" >/dev/null 2>&1
+  done
+  command -v hcx >/dev/null && hcx forget "$NAME" >/dev/null 2>&1
+  find "$HOME/.omp/agent/sessions" -maxdepth 1 -type d -name "*omp-canary*" -exec rm -rf {} + 2>/dev/null
+  rm -rf "$TMP"
+}
+trap cleanup EXIT
+
+echo "omp canary $VERSION on $(hostname -s), terminal $NAME"
+
+# --- 1. The release binary, checksum-verified.
+base="https://github.com/can1357/oh-my-pi/releases/download/v$VERSION"
+asset="omp-darwin-$(uname -m | sed 's/x86_64/x64/')"
+if ! curl -fsSL -o "$TMP/omp" "$base/$asset" || ! curl -fsSL -o "$TMP/SHA256SUMS.txt" "$base/SHA256SUMS.txt"; then
+  echo "can't download omp $VERSION ($base/$asset)"; exit 1
+fi
+want=$(awk -v a="$asset" '$2 == a || $2 == "*"a {print $1}' "$TMP/SHA256SUMS.txt")
+got=$(shasum -a 256 "$TMP/omp" | awk '{print $1}')
+[ -n "$want" ] && [ "$want" = "$got" ] || { echo "checksum mismatch for $asset (want $want, got $got)"; exit 1; }
+chmod +x "$TMP/omp"
+xattr -d com.apple.quarantine "$TMP/omp" 2>/dev/null
+note "binary: $("$TMP/omp" --version 2>&1 | head -1) (installed: $(omp --version 2>/dev/null || echo none))"
+
+# --- 2. Start it as an agent would run.
+touch "$TMP/started"
+argv=("$TMP/omp"); [ -n "${CANARY_MODEL:-}" ] && argv+=(--model "$CANARY_MODEL")
+"$HC" run --bg --name "$NAME" --cwd "$WORK" -- "${argv[@]}" >/dev/null || { echo "hc run failed"; exit 1; }
+end=$(( $(date +%s) + 60 ))
+until [ "$("$HC" get "$NAME" --json 2>/dev/null | jq -r '(.status|objects|.app) // empty')" = omp ] || [ "$(date +%s)" -gt "$end" ]; do sleep 2; done
+sleep 3
+
+# load: every extension in the folder loads.
+failed=$(screen 400 | tr -s ' \n' ' ' | grep -oE 'Failed to load extension [^:]+' | sed 's/Failed to load extension //' | sort -u | tr '\n' ' ')
+mine=$(ls "$EXT" 2>/dev/null | tr '\n' ' ')
+if [ -z "$failed" ]; then result load PASS "all of: $mine"; else result load FAIL "failed: $failed"; fi
+
+# hc-notes: a message from another agent draws as a card.
+if [ -e "$EXT/hc-notes.ts" ]; then
+  "$HC" send "$NAME" '<hc from="t99 canary-sender">[canary-sender] Canary check of message rendering. Do not message anyone or run tools; reply here with just: ok</hc>' >/dev/null
+  if until_screen '◆ canary-sender' 60 && ! screen 400 | grep -q '<hc from="t99'; then
+    result hc-notes PASS "note drawn as a card"
+  else
+    result hc-notes FAIL "no card, or raw <hc> tags on screen"
+  fi
+  until_idle 120
+else
+  result hc-notes SKIP "not installed"
+fi
+
+# hc-name: the session took the terminal's name.
+if [ -e "$EXT/hc-name.ts" ]; then
+  f=$(session_file)
+  if [ -n "$f" ] && grep -E '"type":"title_change"' "$f" | tail -1 | grep -q "\"title\":\"$NAME\".*\"source\":\"user\"\|\"source\":\"user\".*\"title\":\"$NAME\""; then
+    result hc-name PASS "session named $NAME"
+  else
+    result hc-name FAIL "no title_change to $NAME (session file: ${f:-none})"
+  fi
+else
+  result hc-name SKIP "not installed"
+fi
+
+# hc-guard: the herdr CLI is refused.
+if [ -e "$EXT/hc-guard.ts" ]; then
+  "$HC" send "$NAME" 'Canary check of a command guard. Run exactly this one bash command, then reply with its output verbatim and nothing else: herdr ls' >/dev/null
+  if until_screen 'hc-guard: this agent runs in herdr-core' 120; then result hc-guard PASS "herdr ls refused"
+  else result hc-guard FAIL "no hc-guard refusal on screen"; fi
+  until_idle 120
+else
+  result hc-guard SKIP "not installed"
+fi
+
+# restart: /restart re-execs in place on the same session.
+pid=$("$HC" get "$NAME" --json | jq -r '.foreground.pid // empty')
+"$HC" send "$NAME" '/restart' >/dev/null
+end=$(( $(date +%s) + 60 ))
+until ps -o command= -p "$pid" 2>/dev/null | grep -q -- '--restore' || [ "$(date +%s)" -gt "$end" ]; do sleep 2; done
+if ps -o command= -p "$pid" 2>/dev/null | grep -q -- '--restore'; then
+  sleep 8
+  again=$(screen 400 | tr -s ' \n' ' ' | grep -oE 'Failed to load extension [^:]+' | sort -u | tr '\n' ' ')
+  if [ -z "$again" ]; then result restart PASS "same pid $pid, --restore, extensions loaded again"
+  else result restart FAIL "after restart: $again"; fi
+else
+  result restart FAIL "pid $pid not re-exec'd with --restore"
+fi
+
+# orbitals: its suite, then a real ask answered through the board.
+ORB=$HOME/code/orbitals
+if [ -e "$EXT/orbitals.ts" ] && [ -d "$ORB" ]; then
+  if (cd "$ORB" && bun test ./test_extension.ts >"$TMP/orbitals-test.log" 2>&1); then
+    result orb-tests PASS "$(grep -E '^ *[0-9]+ pass' "$TMP/orbitals-test.log" | tr -s ' ')"
+  else
+    result orb-tests FAIL "see $(tail -3 "$TMP/orbitals-test.log" | tr '\n' ' ')"
+  fi
+  url=${ORBITALS_URL:-http://127.0.0.1:8642}
+  if curl -fsS -m 3 "$url/api/state" >/dev/null 2>&1 || command -v orbitals >/dev/null; then
+    until_idle 60
+    "$HC" send "$NAME" 'Canary check of the Orbitals ask bridge; no real decision. Step 1: call the orbitals tool with {"action":"join","coordinator_id":"omp-canary","name":"omp-canary","takeover":true}. Step 2: call ask with exactly this html: <form><fieldset><legend>Pick one</legend><label><input type="radio" name="pick" value="a" checked> Alpha</label><label><input type="radio" name="pick" value="b"> Beta</label></fieldset></form> Step 3: reply with the ask result text verbatim, then call the orbitals tool with {"action":"leave"} and stop.' >/dev/null
+    id=""; end=$(( $(date +%s) + 120 ))
+    while [ -z "$id" ] && [ "$(date +%s)" -lt "$end" ]; do
+      sleep 3
+      id=$(orbitals state 2>/dev/null | jq -r '[.. | objects | select(.agent_id? == "omp-canary" and .state? == "open" and ((.id // "") | startswith("ask-")))][0].id // empty')
+    done
+    if [ -z "$id" ]; then
+      result orb-ask FAIL "no open ask blocker for omp-canary on the board"
+    else
+      curl -fsS -m 10 -X POST "$url/api/blockers/$id/answer" -H 'content-type: application/json' \
+        -d '{"source":"orbitals","answer":{"kind":"submit","results":[{"id":"pick","selectedOptions":["Beta"]}]}}' >/dev/null
+      if until_screen '"pick": "b"' 90; then result orb-ask PASS "board answer reached the agent as form data"
+      else result orb-ask FAIL "answered $id on the board; agent never showed \"pick\": \"b\""; fi
+    fi
+    until_idle 90
+  else
+    result orb-ask SKIP "no Orbitals board on this Mac"
+  fi
+else
+  result orb-tests SKIP "orbitals not installed here"
+  result orb-ask SKIP "orbitals not installed here"
+fi
+
+# ghwatch: its tests, once it exists.
+GW=$HOME/code/omp-ghwatch
+if [ -d "$GW" ]; then
+  if (cd "$GW" && bun test >"$TMP/ghwatch-test.log" 2>&1); then
+    result ghwatch PASS "$(grep -E '^ *[0-9]+ pass' "$TMP/ghwatch-test.log" | tr -s ' ')"
+  else
+    result ghwatch FAIL "$(tail -3 "$TMP/ghwatch-test.log" | tr '\n' ' ')"
+  fi
+else
+  result ghwatch SKIP "~/code/omp-ghwatch not on this Mac"
+fi
+
+echo
+if [ "$FAILED" = 0 ]; then echo "omp $VERSION: all checks passed"; else echo "omp $VERSION: FAILED (see above)"; fi
+exit "$FAILED"
