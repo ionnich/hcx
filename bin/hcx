@@ -98,7 +98,10 @@ cmd_snapshot() {
   state=$(load); live=$(live_agents); boot=$(boot_id)
   while IFS= read -r t; do
     addr=$(jq -r .address <<<"$t")
-    "$HC" label "$addr" hcx=1 space="$(jq -r .space <<<"$t")" >/dev/null
+    # herdr.space / herdr.tab group and name the terminal in hc-tui (and other Herdr clients
+    # that read them) when the Herdr app's own spaces don't cover it.
+    "$HC" label "$addr" hcx=1 space="$(jq -r .space <<<"$t")" herdr.space="$(jq -r .space <<<"$t")" \
+      herdr.tab="$(jq -r '.name // .address' <<<"$t")" >/dev/null
     rec=$("$HC" get "$addr" --json)
     pid=$(jq -r '.foreground | select(.name == "omp") | .pid // empty' <<<"$rec")
     argv=$(jq -c "(.argv // []) | $STRIP_RESUME" <<<"$rec")

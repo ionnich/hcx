@@ -1,0 +1,39 @@
+#!/usr/bin/env bash
+# scripts/rollout: put the pushed main branch of this repo onto every Mac and rebuild each one.
+#
+#   scripts/rollout            all machines below
+#   scripts/rollout studio     just one
+#
+# For each machine: `git pull` its ~/code/hcx checkout, `nix flake update hcx` in its system
+# flake, rebuild, then reload the Rex actions where they're loaded. Run it from the MacBook
+# after `git push`. Edit MACHINES when a Mac joins or its flake moves.
+set -euo pipefail
+
+# name | how to reach it (local or an ssh host) | its system flake | rebuild command
+MACHINES=(
+  "macbook|local|/etc/nix-darwin|sudo darwin-rebuild switch --flake /etc/nix-darwin"
+  "studio|studio|/Users/nich/nix|sudo -n /Users/nich/nix/scripts/apply.sh nich-studio"
+)
+
+run_on() {   # run_on HOST SCRIPT
+  if [ "$1" = local ]; then bash -c "$2"; else ssh -o BatchMode=yes "$1" "bash -s" <<<"$2"; fi
+}
+
+rev=$(git -C "$(dirname "$0")/.." rev-parse --short origin/main 2>/dev/null || echo "?")
+for m in "${MACHINES[@]}"; do
+  IFS='|' read -r name host flake rebuild <<<"$m"
+  [ $# -eq 0 ] || [ "$1" = "$name" ] || continue
+  printf '== %s (%s), main at %s\n' "$name" "$host" "$rev"
+  run_on "$host" "
+    set -euo pipefail
+    git -C ~/code/hcx pull -q --ff-only
+    git -C ~/code/hcx log --oneline -1
+    cd '$flake' && nix flake update hcx 2>&1 | grep -E 'Updated|error' || true
+    $rebuild >/tmp/hcx-rollout.log 2>&1 || { tail -20 /tmp/hcx-rollout.log; exit 1; }
+    echo 'rebuilt'
+    if [ -f ~/.config/rex/init.lua ] && grep -q hcx.lua ~/.config/rex/init.lua; then
+      ~/.local/bin/rex config reload >/dev/null && echo 'Rex actions reloaded'
+    fi
+    launchctl kickstart gui/\$(id -u)/org.nixos.hcx && echo 'hcx tick run'
+  "
+done

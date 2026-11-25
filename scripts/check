@@ -1,0 +1,51 @@
+#!/usr/bin/env bash
+# scripts/check: static checks for everything in this repo. Touches no running service.
+# Runs locally (before a commit) and in CI. Exits non-zero on the first kind of failure it finds.
+set -euo pipefail
+cd "$(dirname "$0")/.."
+fail=0
+step() { printf '== %s\n' "$*"; }
+bad() { printf 'FAIL: %s\n' "$*" >&2; fail=1; }
+
+step "bash syntax"
+for f in bin/hcx scripts/hcx-migrate-herdr scripts/check scripts/rollout scripts/status; do
+  bash -n "$f" || bad "$f"
+done
+
+step "shellcheck (errors only)"
+if command -v shellcheck >/dev/null; then
+  shellcheck -S error bin/hcx scripts/hcx-migrate-herdr scripts/check scripts/rollout scripts/status || bad shellcheck
+else
+  echo "shellcheck not installed; skipped"
+fi
+
+step "Lua syntax (rex/hcx.lua)"
+if command -v luac >/dev/null; then luac -p rex/hcx.lua || bad rex/hcx.lua; else echo "luac not installed; skipped"; fi
+
+step "Rex accepts the actions (rex config check)"
+if command -v rex >/dev/null && rex --autostart=false server status >/dev/null 2>&1; then
+  tmp=$(mktemp -d); printf 'dofile("%s")\n' "$PWD/rex/hcx.lua" >"$tmp/init.lua"
+  out=$(rex config check "$tmp/init.lua" 2>&1) || bad "rex config check: $out"
+  grep -q 'actions: 5' <<<"$out" || bad "expected 5 actions: $out"
+  rm -rf "$tmp"
+else
+  echo "no Rex server here; skipped"
+fi
+
+step "Nix syntax"
+for f in flake.nix nix/*.nix; do nix-instantiate --parse "$f" >/dev/null || bad "$f"; done
+
+step "omp extension parses (hc-notes.ts)"
+if command -v bun >/dev/null; then
+  bun build --target=bun --external '@oh-my-pi/*' omp/hc-notes.ts >/dev/null || bad omp/hc-notes.ts
+else
+  echo "bun not installed; skipped"
+fi
+
+step "resume-flag stripping"
+strip=$(sed -n "/^STRIP_RESUME='/,/| .out'\$/p" bin/hcx | sed "1s/^STRIP_RESUME='//; \$s/'\$//")
+got=$(jq -c "$strip" <<<'["env","A=1","omp","--model","m","--resume=/x.jsonl","--restore","/y.jsonl","-c","--continue"]')
+[ "$got" = '["env","A=1","omp","--model","m"]' ] || bad "STRIP_RESUME gave $got"
+
+[ "$fail" = 0 ] && echo "all checks passed"
+exit "$fail"

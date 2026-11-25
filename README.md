@@ -6,10 +6,12 @@ hc-tui in a terminal, the Herdr app, Rex, and Heeler on the phone. hcx is the gl
 - **Keeps agents resumable.** Every minute it adopts any omp running in hc, records its
   conversation file and command line, and after a reboot restarts each one where it left off.
 - **Mirrors agents into Rex.** Each Mac's Rex gets an `agents` session: a tab per space, its
-  agents side by side, each pane running `hc attach`. The Mac you sit at also gets a `board`
-  tab listing every agent on every Mac.
+  agents side by side. A pane outlives its agent: quit omp and it offers to revive it on the
+  same conversation. The Mac you sit at also gets a `board` tab listing every agent on every Mac.
 - **Drives agents from Rex.** Palette actions to jump to an agent, read its output, message
   it, answer it when it's blocked, start a new one, or float hc-tui over any window.
+- **Makes agent-to-agent messages readable.** An omp extension draws the `<hc from="…">`
+  messages agents send each other as a small card.
 - **Moves agents off Herdr TUI** with their conversations intact (`hcx-migrate-herdr`).
 
 Agents never live in Rex or any other UI, so any UI can be closed, restarted, swapped or
@@ -70,7 +72,21 @@ dofile(os.getenv("HOME") .. "/.config/rex/hcx.lua")
 
 - [Architecture](docs/architecture.md): components, where things run, data flows, lifecycle.
 - [Operations](docs/operations.md): install, update, day-to-day commands, the module's options.
+- [Maintenance](docs/maintenance.md): check / rollout / status scripts, tested versions,
+  upgrading each component, the smoke test, adding a Mac.
 - [Migrating from Herdr TUI](docs/migrating-from-herdr.md): moving live agents and teams.
 - [Troubleshooting](docs/troubleshooting.md): known failure modes and their fixes.
 - [Decisions](docs/decisions.md): why it's built this way, with the evidence.
 - [Changelog](CHANGELOG.md)
+
+## Layout
+
+| Path | What |
+|---|---|
+| `bin/hcx` | tick, resume, revive, Rex sync, `view`, `agents`, `board`, `fit` |
+| `scripts/hcx-migrate-herdr` | move one agent off Herdr TUI |
+| `scripts/check`, `scripts/rollout`, `scripts/status` | maintenance (see docs/maintenance.md) |
+| `rex/hcx.lua` | Rex palette actions and keys |
+| `omp/hc-notes.ts` | omp extension that renders hc messages |
+| `skills/hc/SKILL.md` | the `hc` agent skill |
+| `nix/module.nix`, `nix/packages.nix`, `flake.nix` | the nix-darwin module and packages |

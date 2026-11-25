@@ -35,6 +35,7 @@
 | `openRexAtLogin` | false | false | **true** | Rex.app (hidden) at login, which starts its server |
 | `skill` | true | true | true | `~/.agents/skills/hc/SKILL.md` |
 | `rexActions` | true | true | true | `~/.config/rex/hcx.lua` (only loaded where `init.lua` dofiles it) |
+| `ompNotes` | true | true | true | `~/.omp/agent/extensions/hc-notes.ts`: hc messages drawn as cards |
 | `guardRexAutostart` | false | false | **true** | `REX_AUTOSTART=0` in fish |
 
 launchd jobs: `org.nixos.hcx` (every 60 s, log `/tmp/hcx_<user>.log`), `org.nixos.herdr-app`,
@@ -42,11 +43,12 @@ launchd jobs: `org.nixos.hcx` (every 60 s, log `/tmp/hcx_<user>.log`), `org.nixo
 
 ## Change hcx and roll it out
 
-1. Edit in `~/code/hcx`, commit, push.
-2. On each Mac: `git -C ~/code/hcx pull`, then in its flake `nix flake update hcx` and rebuild
-   (`sudo darwin-rebuild switch --flake …`; on the Studio `nixup`, or
-   `sudo -n ~/nix/scripts/apply.sh nich-studio`, which needs no password).
-3. Rex actions: `rex config reload` on the Mac whose init.lua loads them.
+1. Edit in `~/code/hcx`; `scripts/check`; commit, push (CI runs the same checks).
+2. `scripts/rollout` (or `scripts/rollout studio`): on each Mac it pulls `~/code/hcx`, runs
+   `nix flake update hcx` in that Mac's flake, rebuilds (`darwin-rebuild switch` on the MacBook,
+   `sudo -n ~/nix/scripts/apply.sh nich-studio` on the Studio, which needs no password),
+   reloads the Rex actions and runs a tick.
+3. `scripts/status` to confirm. See [maintenance.md](maintenance.md).
 
 ## Day to day
 

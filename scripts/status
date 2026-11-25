@@ -1,0 +1,51 @@
+#!/usr/bin/env bash
+# scripts/status: health of the hybrid setup on every Mac, read-only.
+#
+#   scripts/status            all machines (local + ssh hosts below)
+#
+# Per machine: component versions, the launchd jobs, whether the hc core runs with your login
+# PATH, the agents hcx records, and the Rex `agents` tabs. Compare versions against the matrix
+# in docs/maintenance.md after any upgrade.
+set -euo pipefail
+HOSTS=(local studio)
+
+probe='
+set +e
+H=$HOME/.local/bin
+printf "host        %s\n" "$(hostname -s)"
+printf "rex         %s\n" "$($H/rex version 2>/dev/null | head -1)"
+printf "rex api     %s\n" "$($H/rex version 2>/dev/null | sed -n "s/^api: //p")"
+printf "hc          %s\n" "$($H/hc --version 2>/dev/null)"
+printf "omp         %s\n" "$($H/omp --version 2>/dev/null)"
+printf "hc-tui      %s\n" "$(PATH=/run/current-system/sw/bin hc-tui --version 2>/dev/null)"
+printf "herdr app   %s\n" "$(defaults read $HOME/Applications/Herdr.app/Contents/Info.plist CFBundleShortVersionString 2>/dev/null)"
+printf "Rex.app     %s\n" "$(defaults read /Applications/Rex.app/Contents/Info.plist CFBundleVersion 2>/dev/null)"
+printf "jobs        %s\n" "$(launchctl list | awk "/org.nixos.(hcx|herdr-app|rex-app)\$/{print \$3\"(\"\$2\")\"}" | tr "\n" " ")"
+core=$(pgrep -f -- "--hc-launchd .*/ready|herdr-core serve" | head -1)
+if [ -n "$core" ]; then
+  # The core hands agents the environment it was started with (saved over its socket, so the
+  # core process itself shows launchd'"'"'s). Check a live agent'"'"'s PATH instead.
+  apid=$($H/hc ls --json 2>/dev/null | jq -r "[.terminals[] | select(.state==\"live\" and (.address|contains(\"/\")|not))][0].address // empty" \
+    | xargs -I{} $H/hc get {} --json 2>/dev/null | jq -r ".foreground.pid // empty")
+  if [ -n "$apid" ]; then
+    path=$(ps -E -o command= -p "$apid" | tr " " "\n" | sed -n "s/^PATH=//p" | head -1)
+    case "$path" in */run/current-system/sw/bin*|*/opt/homebrew/bin*) ok="agents get the login PATH";; *) ok="agents get a BARE PATH (see troubleshooting)";; esac
+  else ok="no agent here to check its PATH"; fi
+  printf "hc core     pid %s, %s\n" "$core" "$ok"
+else
+  printf "hc core     NOT RUNNING\n"
+fi
+hcx=/run/current-system/sw/bin/hcx
+if [ -x "$hcx" ]; then
+  printf "agents      %s\n" "$($hcx ls 2>/dev/null | awk -F"\t" "{printf \"%s(%s) \", \$2, \$3}")"
+else
+  printf "hcx         MISSING from /run/current-system: the active system is not the one with services.hcx\n"
+fi
+s=$($H/rex --autostart=false ls --json 2>/dev/null | jq -r ".sessions[] | select(.label==\"agents\") | .session_id")
+[ -n "$s" ] && printf "rex tabs    %s\n" "$($H/rex --autostart=false api call -s "$s" session.view "{}" | jq -r "[.windows[].label] | join(\" \")")"
+'
+
+for h in "${HOSTS[@]}"; do
+  if [ "$h" = local ]; then bash -c "$probe"; else ssh -o BatchMode=yes "$h" "bash -s" <<<"$probe"; fi
+  echo
+done

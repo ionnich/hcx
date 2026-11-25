@@ -1,6 +1,12 @@
 # Changelog
 
 ## 2026-11-26
+- omp extension `hc-notes` (module option `ompNotes`, on by default): messages hc delivers
+  between agents (`<hc from="…">…</hc>`) show as a card with the sender's name instead of raw
+  tags. The model still gets the original text.
+- hcx labels terminals `herdr.space` / `herdr.tab`, so hc-tui groups and names them.
+- Maintenance: `scripts/check` (also in CI), `scripts/rollout`, `scripts/status`, and
+  docs/maintenance.md (tested versions, upgrades, smoke test, adding a Mac).
 - Quitting an agent keeps its Rex pane: panes run `hcx view`, which offers r revive / f forget /
   q close once the agent ends, and clears the agent's Rex status. Quit agents are kept as
   `closed` (not resumed after a reboot) instead of forgotten. New: `hcx revive`, `hcx sync`.

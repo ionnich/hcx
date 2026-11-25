@@ -54,6 +54,12 @@ in
       dofile(os.getenv("HOME") .. "/.config/rex/hcx.lua").
     '';
 
+    ompNotes = bool true ''
+      Install the hc-notes omp extension at ~/.omp/agent/extensions/hc-notes.ts: messages hc
+      delivers between agents (`<hc from="…">…</hc>`) show as a small card instead of raw tags.
+      The model still gets the original text.
+    '';
+
     guardRexAutostart = bool false ''
       Set REX_AUTOSTART=0 in fish, so an ssh:// Rex client can never start a second Rex server
       outside the login session (for a Mac whose Rex.app owns the server).
@@ -91,6 +97,7 @@ in
       home-manager.users.${cfg.user} = {
         home.file.".agents/skills/hc/SKILL.md" = mkIf cfg.skill { source = ../skills/hc/SKILL.md; };
         xdg.configFile."rex/hcx.lua" = mkIf cfg.rexActions { source = ../rex/hcx.lua; };
+        home.file.".omp/agent/extensions/hc-notes.ts" = mkIf cfg.ompNotes { source = ../omp/hc-notes.ts; };
         xdg.configFile."fish/conf.d/rex-autostart.fish" = mkIf cfg.guardRexAutostart {
           text = ''
             # From the hcx module: Rex.app owns this Mac's Rex server; never let an ssh:// client
