@@ -12,7 +12,7 @@
 #   hc-guard      `herdr ls` from the agent's bash tool is refused
 #   restart       /restart re-execs in place on the same session (how agents pick up plugins)
 #   orbitals      the orbitals test suite, and a real `ask` answered through the board
-#   ghwatch       the GitHub-watch plugin's tests (once ~/code/omp-ghwatch exists)
+#   ghwatch       the GitHub-watch plugin's tests (~/code/ghwatch, where it's checked out)
 #
 # Prints PASS / FAIL / SKIP per check and exits non-zero if anything failed. Uses a few small
 # model turns (set CANARY_MODEL to pick the model, e.g. anthropic/claude-haiku-4-5). Cleans up
@@ -200,7 +200,7 @@ else
 fi
 
 # ghwatch: its tests, once it exists.
-GW=$HOME/code/omp-ghwatch
+GW=$HOME/code/ghwatch
 if [ -d "$GW" ]; then
   if (cd "$GW" && bun test >"$TMP/ghwatch-test.log" 2>&1); then
     result ghwatch PASS "$(grep -E '^ *[0-9]+ pass' "$TMP/ghwatch-test.log" | tr -s ' ')"
@@ -208,7 +208,7 @@ if [ -d "$GW" ]; then
     result ghwatch FAIL "$(tail -3 "$TMP/ghwatch-test.log" | tr '\n' ' ')"
   fi
 else
-  result ghwatch SKIP "~/code/omp-ghwatch not on this Mac"
+  result ghwatch SKIP "~/code/ghwatch not on this Mac"
 fi
 
 echo

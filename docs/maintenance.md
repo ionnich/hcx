@@ -75,7 +75,7 @@ After any of these, run `scripts/status`, then the smoke test.
   |---|---|---|
   | hc-notes, hc-name, hc-guard | this repo, `omp/` | 19.2.1, both Macs |
   | orbitals | `~/code/orbitals` (Studio) | 19.2.1 (suite + board ask) |
-  | ghwatch | `~/code/omp-ghwatch` (in progress) | — |
+  | ghwatch | `~/code/ghwatch` (github.com/ionnich/ghwatch, private) | tests only (not installed yet) |
 - **hc-tui**: see operations.md, "Bump hc-tui".
 
 ## Smoke test (5 minutes)
