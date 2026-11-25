@@ -182,6 +182,9 @@ cmd_view() {
     if [ "$("$HC" get "$name" --json 2>/dev/null | jq -r '.state // empty')" = live ]; then
       "$HC" attach "$name" || true   # returns when the agent ends, or when you detach (ctrl+\)
       [ "$("$HC" get "$name" --json 2>/dev/null | jq -r '.state // empty')" = live ] && return 0
+      # Rex files the agent's status under this pane's process (us), which outlives the agent:
+      # clear it, and leave the agent's alternate screen before drawing the prompt.
+      printf '\033]7501;state=clear:app=omp\033\\\033[?1049l\033[0m'
       continue
     fi
     load | jq -e --arg n "$name" 'any(.[]; .name == $n)' >/dev/null \
