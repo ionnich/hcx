@@ -13,7 +13,8 @@
 //
 // Part of github.com/ionnich/hcx; installed to ~/.omp/agent/extensions by its module.
 // @ts-nocheck
-import { Container, Text } from "@oh-my-pi/pi-tui";
+// Draws as a rows object (`{ render(width): string[] }`), which omp accepts across its pi-tui
+// rewrite (19.2 dropped the Container/Text classes this used before), so it imports nothing.
 
 const NOTE = /<hc(\s[^>]*)?>([\s\S]*?)<\/hc>/g;
 const ONLY_NOTES = /^\s*(?:<hc(?:\s[^>]*)?>[\s\S]*?<\/hc>\s*)+$/;
@@ -28,23 +29,42 @@ function escapeRegExp(s) {
   return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-export default function hcNotes(pi) {
-  pi.registerMessageRenderer("hc-note", (message, _options, theme) => {
-    const box = new Container();
-    for (const note of message.details?.notes ?? []) {
-      // `from` is "ADDRESS NAME" (t16 jw-attest-lead), or absent for hc's own notes.
-      const [address, ...rest] = (note.from ?? "").split(" ").filter(Boolean);
-      const who = rest.join(" ") || address || "hc";
-      let head = theme.fg("accent", `◆ ${who}`);
-      if (address && rest.length) head += theme.fg("dim", `  ${address}`);
-      if (note.reach) head += theme.fg("dim", `  · reply: ${note.reach}`);
-      // Agents often start their report with their own name in brackets; the header has it.
-      const body = (note.body ?? "").trim().replace(new RegExp(`^\\[${escapeRegExp(who)}\\]\\s*`), "");
-      box.addChild(new Text(head, 1, 0));
-      if (body) box.addChild(new Text(theme.fg("customMessageText", body), 3, 0));
+/** Word-wrap plain text to `width` columns, keeping its own line breaks. */
+function wrap(text, width) {
+  const out = [];
+  for (const paragraph of text.split("\n")) {
+    let line = "";
+    for (const word of paragraph.split(/\s+/).filter(Boolean)) {
+      for (let rest = word; rest; ) {
+        const room = width - (line ? line.length + 1 : 0);
+        if (rest.length <= room) { line = line ? `${line} ${rest}` : rest; rest = ""; }
+        else if (line) { out.push(line); line = ""; }
+        else { out.push(rest.slice(0, width)); rest = rest.slice(width); }
+      }
     }
-    return box;
-  });
+    out.push(line);
+  }
+  return out;
+}
+
+export default function hcNotes(pi) {
+  pi.registerMessageRenderer("hc-note", (message, _options, theme) => ({
+    render(width) {
+      const rows = [];
+      for (const note of message.details?.notes ?? []) {
+        // `from` is "ADDRESS NAME" (t16 jw-attest-lead), or absent for hc's own notes.
+        const [address, ...rest] = (note.from ?? "").split(" ").filter(Boolean);
+        const who = rest.join(" ") || address || "hc";
+        const tail = [address && rest.length ? address : "", note.reach ? `· reply: ${note.reach}` : ""].filter(Boolean).join("  ");
+        const head = ` ◆ ${who}`.slice(0, width);
+        rows.push(theme.fg("accent", head) + theme.fg("dim", `  ${tail}`.slice(0, Math.max(0, width - head.length))));
+        // Agents often start their report with their own name in brackets; the header has it.
+        const body = (note.body ?? "").trim().replace(new RegExp(`^\\[${escapeRegExp(who)}\\]\\s*`), "");
+        if (body) for (const line of wrap(body, Math.max(10, width - 3))) rows.push(`   ${theme.fg("customMessageText", line)}`);
+      }
+      return rows;
+    },
+  }));
 
   pi.on("input", (event, ctx) => {
     if (event.source === "extension" || !ONLY_NOTES.test(event.text)) return;
