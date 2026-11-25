@@ -1,0 +1,37 @@
+#!/usr/bin/env bash
+# herdr/apply: put this repo's Herdr app look and mods into a Herdr home (default
+# ~/.config/herdr-app; HERDR_APP_HOME picks another). Idempotent; the app picks changes up live.
+#
+#   - themes/everforest-dark-medium.json   Ghostty's Everforest Dark Med palette, as a Herdr theme
+#   - mods/vim                              Normal mode + space leader (linked to this checkout,
+#                                           so edits here reload in the app)
+#   - settings.json                         theme, and Ghostty's font (Maple Mono NF 16) for
+#                                           terminals and panels
+#   - keys.json                             ctrl-\ ctrl-n in a terminal opens Normal mode
+#
+# Editing keys.json makes it yours for Herdr: new default shortcuts in later releases are no
+# longer added to it automatically (Herdr's rule for any edited keys.json).
+set -euo pipefail
+here=$(cd "$(dirname "$0")" && pwd -P)
+home=${HERDR_APP_HOME:-$HOME/.config/herdr-app}
+[ -d "$home" ] || { echo "no Herdr home at $home (open Herdr once first)"; exit 1; }
+mkdir -p "$home/themes" "$home/mods"
+
+ln -sfn "$here/themes/everforest-dark-medium.json" "$home/themes/everforest-dark-medium.json"
+ln -sfn "$here/mods/vim" "$home/mods/vim"
+
+# Merge, never replace: the app and the person write these files too.
+merge() { # merge FILE JQ_FILTER
+  local tmp; tmp=$(mktemp)
+  jq "$2" "$1" >"$tmp" && cat "$tmp" >"$1"   # cat keeps the file (and any link) in place
+  rm -f "$tmp"
+}
+[ -f "$home/settings.json" ] || echo '{}' >"$home/settings.json"
+merge "$home/settings.json" '. + {theme: "everforest-dark-medium", font: "Maple Mono NF", font_size: 16, ui_font: "Maple Mono NF"}'
+[ -f "$home/keys.json" ] || { echo "no keys.json yet in $home (open Herdr once first)"; exit 1; }
+merge "$home/keys.json" '.terminal = ((.terminal // {}) + {"ctrl-\\ ctrl-n": "mod.open:vim"})'
+
+for f in settings keys; do
+  [ -e "$home/$f.error" ] && { echo "Herdr rejected $f.json: $(cat "$home/$f.error")"; exit 1; }
+done
+echo "applied to $home: theme everforest-dark-medium, Maple Mono NF, mods/vim, ctrl-\\ ctrl-n"

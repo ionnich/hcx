@@ -8,7 +8,7 @@ step() { printf '== %s\n' "$*"; }
 bad() { printf 'FAIL: %s\n' "$*" >&2; fail=1; }
 
 step "bash syntax"
-for f in bin/hcx scripts/hcx-migrate-herdr scripts/check scripts/rollout scripts/status scripts/omp-canary; do
+for f in bin/hcx scripts/hcx-migrate-herdr scripts/check scripts/rollout scripts/status scripts/omp-canary herdr/apply; do
   bash -n "$f" || bad "$f"
 done
 
@@ -30,6 +30,16 @@ if command -v rex >/dev/null && rex --autostart=false server status >/dev/null 2
   rm -rf "$tmp"
 else
   echo "no Rex server here; skipped"
+fi
+
+step "Herdr app: theme parses, mods load (herdr-app check)"
+jq -e '.background and (.ansi | length == 16)' herdr/themes/*.json >/dev/null || bad "herdr/themes"
+if command -v herdr-app >/dev/null; then
+  for m in herdr/mods/*/; do
+    herdr-app check "$m" >/dev/null 2>&1 || bad "herdr-app check $m"
+  done
+else
+  echo "herdr-app not installed; skipped"
 fi
 
 step "Nix syntax"

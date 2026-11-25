@@ -1,0 +1,1 @@
+{ "place": "none", "title": "Normal mode", "overlay": { "kind": "popup", "at": "top", "offset": 10, "width": 0.62, "frame": "none" } }

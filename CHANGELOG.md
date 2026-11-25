@@ -1,6 +1,12 @@
 # Changelog
 
 ## 2026-11-26
+- Herdr app, without a fork: `herdr/themes/everforest-dark-medium.json` (Ghostty's palette),
+  Maple Mono NF, and the `vim` mod: `ctrl-\ ctrl-n` enters Normal mode (hjkl panes, J/K agents,
+  tabs, spaces, scrolling, a space leader menu with hints). `herdr/apply` puts them in place.
+- `scripts/omp-canary VERSION [--on HOST]`: runs an omp release as a throwaway agent and checks
+  every plugin (load, hc-notes, hc-name, hc-guard, /restart, orbitals suite + board ask,
+  ghwatch tests). 19.2.1 passes on both Macs.
 - omp extensions `hc-name` (`ompName`) and `hc-guard` (`ompGuard`), both on by default. hc-name
   names an hc agent's session after its terminal, which also stops omp's title generator
   renaming it (Heeler showed generated titles). hc-guard refuses the herdr CLI, `hc kill/rm/
