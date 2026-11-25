@@ -118,11 +118,12 @@ end
 
 -- The session and window of an agent's tab on its own Mac, after making sure it exists.
 local function agent_tab(a)
+  -- `hcx sync` records the agent (if it's new) and gives it a pane, without waiting for the tick.
   if a.machine == "local" then
-    run({ HCX, "rex-sync" }, 60)
+    run({ HCX, "sync" }, 60)
   else
     local target = ssh_target(a.machine)
-    if target then run(ssh_argv(target, { "hcx", "rex-sync" }), 60) end
+    if target then run(ssh_argv(target, { "hcx", "sync" }), 60) end
   end
   local srv, err = server_for(a.machine)
   if not srv then return nil, err end

@@ -5,14 +5,17 @@
 #   hcx start SPACE NAME DIR [omp args...]  start omp in hc as terminal NAME
 #   hcx tick       adopt live omp terminals, record their session files,
 #                  resume recorded agents once per boot, then rex-sync
-#   hcx resume     restart recorded agents that aren't live
+#   hcx resume     restart recorded agents that aren't live (not ones you quit)
+#   hcx revive NAME   start a quit or dead agent again, same conversation and command line
 #   hcx rex-sync   keep this Mac's `agents` Rex session in step: a tab per space of THIS Mac's
-#                  agents, side by side, each running `hc attach` (plus a `board` tab listing
-#                  every machine's agents with HCX_BOARD=1); off with HCX_REX_SYNC=0
+#                  recorded agents, side by side, each running `hcx view` (plus a `board` tab
+#                  listing every machine's agents with HCX_BOARD=1); off with HCX_REX_SYNC=0
+#   hcx sync       snapshot, then rex-sync (what Rex actions run after starting an agent)
+#   hcx view NAME  a pane's program: `hc attach` while the agent runs, then a revive prompt
 #   hcx agents [--json]  live agents on every machine, with their status
 #   hcx board      a live list of those agents, redrawn on every hc event
-#   hcx forget NAME    stop resuming NAME
-#   hcx ls             show recorded agents
+#   hcx forget NAME    stop resuming NAME and close its pane
+#   hcx ls             show recorded agents (`closed` = you quit it)
 #   hcx fit PID|TTY|--rex-block SESSION BLOCK   make the hc terminal shown in that viewer take its size
 #
 # Any omp running as an hc terminal's own program is adopted, however it was
@@ -21,7 +24,7 @@
 # Rex drops its status instead of keeping a stale one.
 #
 # State: ${XDG_STATE_HOME:-~/.local/state}/hcx/agents.json
-#   [{name, space, cwd, session, address, boot}]
+#   [{name, space, cwd, session, argv, address, boot, closed}]
 set -euo pipefail
 
 HC=${HCX_HC:-$HOME/.local/bin/hc}
@@ -115,37 +118,86 @@ cmd_snapshot() {
           argv: (if (\$argv | length) > 0 then \$argv else \$old.argv end),
           address: \$t.address, boot: \$boot}]" <<<"$state")
   done < <(jq -c '.[]' <<<"$live")
-  # Forget agents that exited normally this boot (a deliberate quit, not a crash or reboot).
+  # Agents that exited normally this boot (you quit them) stay recorded but `closed`: they're
+  # not resumed after a reboot, and their Rex pane offers to revive them. A crash or reboot
+  # (non-zero exit, signal) leaves them open, so they're resumed.
   local done_addrs
   done_addrs=$("$HC" ls --all --json | jq -c '[.terminals[] | select(.state != "live" and .exit_code == 0) | .address]')
   state=$(jq --argjson d "$done_addrs" --arg boot "$boot" \
-    'map(select((.boot == $boot and (.address as $a | $d | index($a))) | not))' <<<"$state")
+    'map(if .boot == $boot and (.address as $a | $d | index($a)) then .closed = true else . end)' <<<"$state")
   save <<<"$state"
 }
 
-cmd_resume() {
-  local state live boot flag rec name cwd session arg addr x
+# Start a recorded agent in hc on its conversation file, with its own command line. $2 is the
+# resume flag (--restore after a reboot, --resume when you revive one you quit). Prints the
+# new address and updates the record.
+start_agent() {
+  local name=$1 flag=$2 rec cwd session arg addr x
   local cmd=()
-  state=$(load); live=$(live_agents); boot=$(boot_id); flag=$(resume_flag)
+  rec=$(load | jq -c --arg n "$name" '.[] | select(.name == $n)')
+  [ -n "$rec" ] || die "$name isn't recorded (hcx ls)"
+  cwd=$(jq -r .cwd <<<"$rec"); session=$(jq -r '.session // empty' <<<"$rec")
+  [ -d "$cwd" ] || die "$name: $cwd is gone"
+  # No file yet (omp writes it on the first message): continue the folder's last session.
+  if [ -n "$session" ] && [ -f "$session" ]; then arg="$flag=$session"; else arg=--continue; fi
+  # The agent's own command (model, env wrapper…) if recorded, else plain omp.
+  while IFS= read -r x; do cmd+=("$x"); done < <(jq -r '(.argv // []) | .[]' <<<"$rec")
+  [ ${#cmd[@]} -gt 0 ] || cmd=("$OMP")
+  addr=$("$HC" run --bg --name "$name" --cwd "$cwd" --json -- "${cmd[@]}" "$arg" | jq -r .address)
+  "$HC" label "$addr" hcx=1 space="$(jq -r .space <<<"$rec")" >/dev/null
+  load | jq --arg n "$name" --arg a "$addr" --arg boot "$(boot_id)" \
+    'map(if .name == $n then .address = $a | .boot = $boot | del(.closed) else . end)' | save
+  printf '%s\n' "$addr"
+}
+
+# After a boot: restart every recorded agent that isn't live and that you didn't quit.
+cmd_resume() {
+  local live boot flag rec name
+  live=$(live_agents); boot=$(boot_id); flag=$(resume_flag)
   while IFS= read -r rec; do
     name=$(jq -r .name <<<"$rec")
     # Live already (by name, or by address this boot)?
     jq -e --argjson r "$rec" --arg boot "$boot" \
       'any(.[]; .name == $r.name or (.address == $r.address and $r.boot == $boot))' <<<"$live" >/dev/null && continue
-    cwd=$(jq -r .cwd <<<"$rec"); session=$(jq -r '.session // empty' <<<"$rec")
-    [ -d "$cwd" ] || { printf 'skip %s: %s is gone\n' "$name" "$cwd" >&2; continue; }
-    # No file yet (omp writes it on the first message): continue the folder's last session.
-    if [ -n "$session" ] && [ -f "$session" ]; then arg="$flag=$session"; else arg=--continue; fi
-    # The agent's own command (model, env wrapper…) if recorded, else plain omp.
-    cmd=(); while IFS= read -r x; do cmd+=("$x"); done < <(jq -r '(.argv // []) | .[]' <<<"$rec")
-    [ ${#cmd[@]} -gt 0 ] || cmd=("$OMP")
-    addr=$("$HC" run --bg --name "$name" --cwd "$cwd" --json -- "${cmd[@]}" "$arg" | jq -r .address)
-    "$HC" label "$addr" hcx=1 space="$(jq -r .space <<<"$rec")" >/dev/null
-    state=$(jq --arg n "$name" --arg a "$addr" --arg boot "$boot" \
-      'map(if .name == $n then .address = $a | .boot = $boot else . end)' <<<"$state")
-    printf 'resumed %s (%s)\n' "$name" "${arg%%=*}"
-  done < <(jq -c '.[]' <<<"$state")
-  save <<<"$state"
+    ( start_agent "$name" "$flag" >/dev/null ) && printf 'resumed %s\n' "$name" || true
+  done < <(load | jq -c '.[] | select(.closed != true)')
+}
+
+# Start an agent you quit (or that died) again, on the same conversation.
+cmd_revive() {
+  [ $# -eq 1 ] || die "usage: hcx revive NAME"
+  if [ "$("$HC" get "$1" --json 2>/dev/null | jq -r '.state // empty')" = live ]; then
+    printf '%s is already running\n' "$1"; return
+  fi
+  start_agent "$1" --resume >/dev/null
+  printf 'revived %s\n' "$1"
+}
+
+# What a Rex pane runs for an agent: `hc attach` while it's running; when it ends, a prompt to
+# revive it (same conversation), forget it, or close the pane. So quitting omp keeps its tab.
+cmd_view() {
+  [ $# -eq 1 ] || die "usage: hcx view NAME"
+  local name=$1 key why
+  while :; do
+    if [ "$("$HC" get "$name" --json 2>/dev/null | jq -r '.state // empty')" = live ]; then
+      "$HC" attach "$name" || true   # returns when the agent ends, or when you detach (ctrl+\)
+      [ "$("$HC" get "$name" --json 2>/dev/null | jq -r '.state // empty')" = live ] && return 0
+      continue
+    fi
+    load | jq -e --arg n "$name" 'any(.[]; .name == $n)' >/dev/null \
+      || { printf '%s is no longer recorded.\n' "$name"; sleep 2; return 0; }
+    why=$("$HC" ls --all --json | jq -r --arg n "$name" '
+      [.terminals[] | select(.name == $n and .state != "live")] | last
+      | if . == null then "is not running" elif .exit_code == 0 then "was quit"
+        else "ended (\(.reason // "exit") \(.exit_code // .signal // ""))" end')
+    printf '\033[H\033[2J\n  %s %s.\n\n    r  revive it, same conversation\n    f  forget it and close this pane\n    q  close this pane (it comes back on the next sync while recorded)\n\n' "$name" "$why"
+    IFS= read -rsn1 key || return 0
+    case "$key" in
+      r) printf '  reviving…\n'; ( cmd_revive "$name" >/dev/null ) || { printf '  revive failed\n'; sleep 3; } ;;
+      f) cmd_forget "$name"; return 0 ;;
+      q) return 0 ;;
+    esac
+  done
 }
 
 # Live top-level omp terminals on EVERY machine this core sees (this one and `hc machine add`
@@ -179,21 +231,24 @@ REX_SESSION=${HCX_REX_SESSION:-agents}
 REX_VIEWS=$STATE_DIR/rex-views.json   # {block_id: label} for the tabs hcx made
 
 # One Rex session, `agents`, on this machine's Rex server: a `board` tab (with HCX_BOARD=1),
-# then one tab per space, its agents side by side, each pane running `hc attach`. Each Mac
+# then one tab per space, its agents side by side. Each pane runs `hcx view NAME`: `hc attach`
+# while the agent runs, and a revive/forget prompt once it ends, so quitting an agent keeps its
+# pane. Panes follow hcx's records (`hcx ls`): forgetting an agent closes its pane. Each Mac
 # mirrors only its OWN agents, so another Mac's agents show under that host in Rex.app and keep
-# their views while this one sleeps. A pane closes by itself when its agent ends (`hc attach`
-# exits); panes hcx made for agents that are no longer live here are closed. Panes you move
-# stay where you put them; only new ones are placed. HCX_REX_SYNC=0 turns it off.
+# their views while this one sleeps. Panes you move stay where you put them; only new ones are
+# placed. HCX_REX_SYNC=0 turns it off.
 cmd_rex_sync() {
   [ "${HCX_REX_SYNC:-1}" = 1 ] || return 0
   need "$REX"
   local R=("$REX" --autostart=false)
   "${R[@]}" server status >/dev/null 2>&1 || return 0   # no Rex here: nothing to mirror
-  local want sid blocks views label group created blk first x anchor
+  local want sid blocks views label group created blk first x anchor self
   local cmd=()
-  # Wanted panes, in order: [{label, group, cmd: [argv]}]
-  want=$(all_agents | jq -c --arg hc "$HC" "map(select(.machine == \"local\")) | sort_by($VIEW_GROUP, $VIEW_LABEL)
-    | map({label: ($VIEW_LABEL), group: ($VIEW_GROUP), cmd: [\$hc, \"attach\", .address]})")
+  self=$(command -v hcx || echo "$0")
+  # Wanted panes, in order: [{label, group, cmd: [argv]}] for every agent hcx records here
+  # (snapshot runs first in tick, so every live agent here is recorded by now).
+  want=$(load | jq -c --arg hcx "$self" 'sort_by(.space, .name)
+    | map({label: .name, group: .space, cmd: [$hcx, "view", .name]})')
   if [ "${HCX_BOARD:-0}" = 1 ]; then
     want=$(jq -c --arg hcx "$(command -v hcx || echo "$0")" '[{label: "board", group: "board", cmd: [$hcx, "board"]}] + .' <<<"$want")
   fi
@@ -323,7 +378,7 @@ cmd_tick() {
 }
 
 cmd_forget() { [ $# -eq 1 ] || die "usage: hcx forget NAME"; load | jq --arg n "$1" 'map(select(.name != $n))' | save; }
-cmd_ls() { load | jq -r '.[] | [.space, .name, .cwd, (.session // "-")] | @tsv'; }
+cmd_ls() { load | jq -r '.[] | [.space, .name, (if .closed then "closed" else "open" end), .cwd, (.session // "-")] | @tsv'; }
 
 # A terminal has one size and the last viewer to send a resize wins. Re-sending the same size
 # does nothing (`hc attach` drops it), so shrink the viewer's terminal by one row and restore it.
@@ -359,11 +414,14 @@ case "$sub" in
   tick) cmd_tick ;;
   snapshot) cmd_snapshot ;;
   resume) cmd_resume ;;
+  revive) cmd_revive "$@" ;;
   rex-sync) cmd_rex_sync ;;
+  sync) cmd_snapshot; cmd_rex_sync ;;
+  view) cmd_view "$@" ;;
   forget) cmd_forget "$@" ;;
   ls) cmd_ls ;;
   agents) cmd_agents "$@" ;;
   board) cmd_board ;;
   fit) cmd_fit "$@" ;;
-  *) sed -n '2,24p' "$0" | sed 's/^# \{0,1\}//'; exit 2 ;;
+  *) sed -n '2,27p' "$0" | sed 's/^# \{0,1\}//'; exit 2 ;;
 esac
