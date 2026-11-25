@@ -67,6 +67,7 @@ launchd jobs: `org.nixos.hcx` (every 60 s, log `/tmp/hcx_<user>.log`), `org.nixo
 | Run the sync now | `hcx tick` (or `launchctl kickstart gui/$(id -u)/org.nixos.hcx`) |
 | Fit a view that looks the wrong size | click the pane (Rex refits on focus) · `cmd+shift+f` · `hcx fit PID\|TTY` |
 | Move an agent off Herdr TUI | `hcx-migrate-herdr --name N` (see migrating-from-herdr.md) |
+| Load new omp extensions into a running agent | when it's idle: `hc send N /restart`. omp re-execs in place (same pid, terminal and children) on the same conversation; check `ps -o command= -p PID` now shows `--restore`. `/reload` does not load new extension code. If an hc message is half-delivered, `/restart` can land at the end of it and get sent as text; send it again. |
 
 ## Bump hc-tui
 
