@@ -1,0 +1,89 @@
+#!/usr/bin/env bash
+# hcx-migrate-herdr: move one omp agent from Herdr TUI into herdr-core (hc), resuming the same
+# conversation with the same command-line flags. See docs/migrating-from-herdr.md.
+#
+#   hcx-migrate-herdr [--restore] [--dry-run] (--name AGENT | --pane PANE) [--as NAME] [--space SPACE]
+#
+#   --name AGENT   the agent's name in `herdr agent list`
+#   --pane PANE    the herdr pane id (for agents herdr never named, e.g. w49:p3)
+#   --as NAME      the hc terminal name (default: AGENT, or the workspace label)
+#   --space SPACE  the hcx space label, which becomes its Rex tab (default: the workspace label)
+#   --restore      resume with --restore (also continues what the old process left unfinished,
+#                  including the subagents it was running) instead of --resume
+#   --dry-run      print what would happen and stop
+#
+# It refuses unless the agent is idle or done, its pane runs omp, and that omp holds the
+# conversation file herdr recorded. It sends `/exit` in the herdr pane and waits for omp to end
+# (it never kills it). Before that, it saves the subagents on screen and the agent's background
+# processes, which do NOT survive the move, to ~/.local/state/hcx/migrations/NAME-TIME.txt.
+# The herdr pane is left as a shell, so you can roll back by resuming the same file there.
+set -euo pipefail
+
+H=${HCX_HERDR:-$HOME/.local/bin/herdr}
+HC=${HCX_HC:-$HOME/.local/bin/hc}
+OMP=${HCX_OMP:-$HOME/.local/bin/omp}
+die() { printf 'hcx-migrate-herdr: %s\n' "$*" >&2; exit 1; }
+
+name="" pane="" as="" space="" flag=--resume dry=0
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --name) name=$2; shift 2 ;;
+    --pane) pane=$2; shift 2 ;;
+    --as) as=$2; shift 2 ;;
+    --space) space=$2; shift 2 ;;
+    --restore) flag=--restore; shift ;;
+    --dry-run) dry=1; shift ;;
+    *) sed -n '2,20p' "$0" | sed 's/^# \{0,1\}//'; exit 2 ;;
+  esac
+done
+[ -n "$name$pane" ] || die "give --name AGENT or --pane PANE"
+
+agents=$("$H" agent list | jq -c '.result.agents // .result')
+workspaces=$("$H" workspace list | jq -c '[.result.workspaces[] | {key: .workspace_id, value: .label}] | from_entries')
+rec=$(jq -c --arg n "$name" --arg p "$pane" '[.[] | select(($n != "" and .name == $n) or ($p != "" and .pane_id == $p))] | first // empty' <<<"$agents")
+[ -n "$rec" ] || die "no such agent in herdr (${name:-$pane})"
+
+pane=$(jq -r .pane_id <<<"$rec"); status=$(jq -r .agent_status <<<"$rec")
+cwd=$(jq -r .cwd <<<"$rec"); session=$(jq -r '.agent_session.value // empty' <<<"$rec")
+label=$(jq -r --argjson w "$workspaces" '$w[.workspace_id] // "agent"' <<<"$rec")
+slug=$(printf '%s' "$label" | tr -cs 'A-Za-z0-9._-' '-' | sed 's/^-*//; s/-*$//')
+as=${as:-${name:-$slug}}; space=${space:-$slug}
+printf '%s.%s' "$as" "$space" | grep -qE '^[A-Za-z0-9._-]+$' || die "names are letters, digits, . _ and - only"
+
+case "$status" in idle|done) ;; *) die "$as: herdr says it's $status; wait until it's idle or done" ;; esac
+[ -n "$session" ] && [ -f "$session" ] || die "$as: no conversation file recorded (${session:-none})"
+pid=$("$H" pane process-info --pane "$pane" | grep -oE '"pid":[0-9]+' | head -1 | cut -d: -f2)
+[ "$(basename "$(ps -o comm= -p "$pid" 2>/dev/null || echo none)")" = omp ] \
+  || die "$as: pane $pane isn't running omp (pid ${pid:-none}); for a dormant agent, start it with: hc run --bg --name $as --cwd $cwd -- omp --resume=$session"
+lsof -Fn -p "$pid" | grep -qF "n$session" || die "$as: omp $pid doesn't hold $session"
+
+# Its flags (e.g. --model), minus any resume flag: we add our own.
+read -r -a flags <<<"$(ps -o args= -p "$pid" | sed -E 's/^[^ ]*omp ?//; s/--(resume|restore)(=| )[^ ]+//g; s/(^| )(--continue|-c)( |$)/ /g')"
+children=$(pgrep -P "$pid" | while read -r c; do ps -o pid=,etime=,args= -p "$c"; done | grep -v '__omp_worker_daemon' || true)
+
+printf '%s: herdr pane %s (workspace %s), omp %s, %s\n  cwd %s\n  flags [%s]\n  -> hc terminal %s, space %s, %s=%s\n' \
+  "$as" "$pane" "$label" "$pid" "$status" "$cwd" "${flags[*]-}" "$as" "$space" "$flag" "$(basename "$session")"
+if [ -n "$children" ]; then
+  printf '  background processes that will END with the move:\n'; printf '%s\n' "$children" | sed 's/^/    /' | cut -c1-140
+fi
+[ "$dry" = 1 ] && exit 0
+
+inv=$HOME/.local/state/hcx/migrations/$as-$(date +%Y%m%dT%H%M%S).txt
+mkdir -p "$(dirname "$inv")"
+{
+  printf '# %s before moving from herdr (pane %s, workspace %s) to hc, %s\n' "$as" "$pane" "$label" "$(date)"
+  printf 'session: %s\ncwd: %s\nomp: %s\n\n## Subagents on screen\n' "$session" "$cwd" "$(ps -o args= -p "$pid")"
+  "$H" pane read "$pane" --lines 60 2>/dev/null | sed -n '/Subagents/,/^$/p'
+  printf '\n## Background processes (children of omp)\n%s\n' "${children:-none}"
+} >"$inv"
+
+"$H" pane send-text "$pane" "/exit" >/dev/null; "$H" pane send-keys "$pane" enter >/dev/null
+for _ in $(seq 1 40); do kill -0 "$pid" 2>/dev/null || break; sleep 1; done
+kill -0 "$pid" 2>/dev/null && die "$as: omp $pid didn't exit after /exit; it's still running in herdr"
+
+addr=$("$HC" run --bg --name "$as" --cwd "$cwd" --json -- \
+  env PI_SKIP_VERSION_CHECK=1 "$OMP" ${flags[@]+"${flags[@]}"} "$flag=$session" | jq -r .address)
+"$HC" label "$addr" hcx=1 space="$space" >/dev/null
+st=""; for _ in $(seq 1 40); do st=$("$HC" get "$addr" --json | jq -r '.status.state // empty'); [ -n "$st" ] && break; sleep 1; done
+printf '%s: now hc %s, status %s\n  inventory saved to %s\n' "$as" "$addr" "${st:-none yet}" "$inv"
+printf '  next: tell it it moved (docs/migrating-from-herdr.md has the note), and to re-arm anything listed above.\n'
