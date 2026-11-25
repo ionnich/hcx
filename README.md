@@ -86,7 +86,7 @@ dofile(os.getenv("HOME") .. "/.config/rex/hcx.lua")
 |---|---|
 | `bin/hcx` | tick, resume, revive, Rex sync, `view`, `agents`, `board`, `fit` |
 | `scripts/hcx-migrate-herdr` | move one agent off Herdr TUI |
-| `scripts/check`, `scripts/rollout`, `scripts/status` | maintenance (see docs/maintenance.md) |
+| `scripts/check`, `scripts/rollout`, `scripts/status`, `scripts/omp-canary` | maintenance (see docs/maintenance.md) |
 | `rex/hcx.lua` | Rex palette actions and keys |
 | `omp/hc-notes.ts`, `omp/hc-name.ts`, `omp/hc-guard.ts` | omp extensions: render hc messages, name sessions after their terminal, guard other agents |
 | `skills/hc/SKILL.md` | the `hc` agent skill |

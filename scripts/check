@@ -8,13 +8,13 @@ step() { printf '== %s\n' "$*"; }
 bad() { printf 'FAIL: %s\n' "$*" >&2; fail=1; }
 
 step "bash syntax"
-for f in bin/hcx scripts/hcx-migrate-herdr scripts/check scripts/rollout scripts/status; do
+for f in bin/hcx scripts/hcx-migrate-herdr scripts/check scripts/rollout scripts/status scripts/omp-canary; do
   bash -n "$f" || bad "$f"
 done
 
 step "shellcheck (errors only)"
 if command -v shellcheck >/dev/null; then
-  shellcheck -S error bin/hcx scripts/hcx-migrate-herdr scripts/check scripts/rollout scripts/status || bad shellcheck
+  shellcheck -S error bin/hcx scripts/hcx-migrate-herdr scripts/check scripts/rollout scripts/status scripts/omp-canary || bad shellcheck
 else
   echo "shellcheck not installed; skipped"
 fi

@@ -3,13 +3,14 @@
 How to keep the hybrid setup healthy over time. Day-to-day commands are in
 [operations.md](operations.md); this page is for changes, upgrades and checks.
 
-## The three scripts
+## The scripts
 
 | Script | When | What |
 |---|---|---|
-| `scripts/check` | before every commit; CI runs it on push | Static checks: bash syntax and shellcheck, Lua syntax and `rex config check` of the actions, Nix syntax, the omp extension parses, resume-flag stripping. Touches no service. |
+| `scripts/check` | before every commit; CI runs it on push | Static checks: bash syntax and shellcheck, Lua syntax and `rex config check` of the actions, Nix syntax, the omp extensions parse, hc-guard's decisions, resume-flag stripping. Touches no service. |
 | `scripts/rollout [machine]` | after `git push` | On each Mac: pull `~/code/hcx`, `nix flake update hcx`, rebuild, reload Rex actions, run a tick. Machines are listed at the top of the script. |
 | `scripts/status` | after a rollout or any upgrade; when something looks off | Read-only health per Mac: versions, launchd jobs, whether agents get the login PATH, recorded agents, Rex tabs. Flags a missing `hcx` (the active system isn't the one with `services.hcx`). |
+| `scripts/omp-canary VERSION [--on studio]` | before updating omp | Runs that omp release (downloaded, checksum-verified, into a temp folder) as a throwaway agent on this Mac's real `~/.omp/agent`, and checks every plugin: all extensions load, hc-notes draws a card, hc-name names the session, hc-guard refuses `herdr ls`, `/restart` re-execs in place, the orbitals suite plus a real `ask` answered on the board (Studio), ghwatch's tests. PASS/FAIL/SKIP per check; cleans up after itself. A few small model turns (`CANARY_MODEL=` picks the model). |
 
 ## Where everything lives
 
@@ -55,13 +56,26 @@ After any of these, run `scripts/status`, then the smoke test.
   changelog for changes to `hc ls --json`, `hc get --json` (`argv`, `labels`, `status`,
   `foreground`, `name`, `parent`), `HC_TERMINAL_ID`, `hc attach`, `hc events`: hcx and the omp
   extensions parse them.
-- **omp**. Check `title.*` and `terminal.programStatus` settings, `--resume`/`--restore`/
-  `--continue`, and that the three extensions in `~/.omp/agent/extensions/hc-*.ts` still load
-  (a startup warning names any extension that fails). They use `pi.on("input" | "tool_call" |
-  "session_start" | "session_switch" | "session_branch")`, `pi.sendMessage`,
-  `pi.registerMessageRenderer`, `pi.setSessionName`, the `{ block, reason }` tool-call result, and
-  `Container`/`Text` from `@oh-my-pi/pi-tui`. hc-name relies on a name set by an extension
-  stopping the title generator (`titleSource === "user"`).
+- **omp** (installed by its own updater at `~/.local/bin/omp`; not pinned by nix). Agents keep
+  the version they started with until they restart, so an update never breaks a running agent.
+  To update:
+  1. `scripts/omp-canary NEW --on studio` (and without `--on` for the MacBook).
+  2. Fix anything red. The usual causes: a plugin importing omp internals (19.2 dropped pi-tui's
+     `Container`/`Text`; ours now draw plain rows) or replacing a built-in tool whose schema
+     changed (omp 19 made `ask` an HTML form; orbitals handles both).
+  3. `omp update` on each Mac (`omp update --check` first).
+  4. Each agent `/restart`s when idle (operations.md, "Load new omp extensions").
+  Plugin rules that keep this cheap: use only the extension API (`pi.on(...)`, `pi.sendMessage`,
+  `pi.registerMessageRenderer`, `pi.setSessionName`, the `{ block, reason }` tool-call result),
+  draw with rows objects (`{ render(width): string[] }`), import nothing from `@oh-my-pi/*`
+  internals, and feature-check optional UI (`ctx.ui.formDialog`). hc-name relies on a name set
+  by an extension stopping the title generator (`titleSource === "user"`).
+
+  | Plugin | Repo | Last canary |
+  |---|---|---|
+  | hc-notes, hc-name, hc-guard | this repo, `omp/` | 19.2.1, both Macs |
+  | orbitals | `~/code/orbitals` (Studio) | 19.2.1 (suite + board ask) |
+  | ghwatch | `~/code/omp-ghwatch` (in progress) | — |
 - **hc-tui**: see operations.md, "Bump hc-tui".
 
 ## Smoke test (5 minutes)
