@@ -27,12 +27,14 @@ phone.
 (without the pause `hc attach` merges the two changes and sends nothing). Detach and attach again
 also works anywhere.
 
-## Rex keeps a status after the agent went back to a shell
-**Cause:** Rex attributes OSC 7501 received through `hc attach` to the `hc attach` process, which
-stays alive; hc itself clears it.
-**Fix:** run agents as the terminal's own program (`hc run … -- omp`, never `sh -c 'omp'`).
-hcx and `hcx-migrate-herdr` do. The agent then ends its terminal, `hc attach` exits, and the
-record goes with it.
+## Rex keeps a status after the agent ended
+**Cause:** Rex files OSC 7501 under the pane's foreground process. That's `hcx view` (a bash
+wrapper around `hc attach`), which outlives the agent so the pane can offer to revive it. hc
+itself clears the status.
+**Fix (done):** when the agent ends, `hcx view` sends `OSC 7501 state=clear:app=omp` (tested:
+the record goes). Panes still running a bare `hc attach` (made before 2026-11-26) lose their
+record when `hc attach` exits. Run agents as the terminal's own program (`hc run … -- omp`,
+never `sh -c 'omp'`), so the terminal ends with the agent.
 
 ## `fish: Unknown command: …/hc-tui` from Toggle hc-tui
 **Cause:** an action run from a window on another host opens its pane on **that** host's Rex

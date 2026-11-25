@@ -40,9 +40,10 @@ Why the setup is the way it is. Each entry: decision, reasons, evidence, what wo
 - **Limit:** background jobs an agent armed itself (watchers) are not revived; the agent must
   re-arm them.
 
-## 8. Agents run as the terminal's own program
-- **Why:** when the agent exits, the terminal ends, `hc attach` exits and Rex drops the status.
-  Under a shell, Rex keeps the last status.
+## 8. Agents run as the terminal's own program; panes outlive them
+- **Why:** when the agent exits, its terminal ends, so hc's records, Heeler and hc-tui see it
+  gone. The Rex pane (`hcx view`) stays, clears the agent's status, and offers to revive it:
+  quitting omp shouldn't cost you the tab (asked for 2026-11-26).
 
 ## 9. hc-tui is a fork pinned by Nix
 - **Why:** Apache-2.0, ours to change; upstream releases daily. The Nix wrapper turns off its

@@ -1,6 +1,9 @@
 # Changelog
 
 ## 2026-11-26
+- Quitting an agent keeps its Rex pane: panes run `hcx view`, which offers r revive / f forget /
+  q close once the agent ends, and clears the agent's Rex status. Quit agents are kept as
+  `closed` (not resumed after a reboot) instead of forgotten. New: `hcx revive`, `hcx sync`.
 - Moved into its own repo, with a nix-darwin module (`services.hcx`) both Macs use. Replaces the
   copies in `/etc/nix-darwin` (MacBook) and `~/nix/modules/services/hcx` (Studio).
 - `hcx-migrate-herdr`: moves one agent off Herdr TUI (by name or pane, `--restore`, `--dry-run`)

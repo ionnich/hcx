@@ -53,8 +53,9 @@ launchd jobs: `org.nixos.hcx` (every 60 s, log `/tmp/hcx_<user>.log`), `org.nixo
 | Task | Command |
 |---|---|
 | Every agent, both Macs, with status | `hcx agents` (MacBook) · `hc ls` |
-| What hcx will resume after a reboot | `hcx ls` (per Mac) |
-| Stop resuming an agent | `hcx forget NAME` (or quit it normally: exit 0 forgets it) |
+| What hcx will resume after a reboot | `hcx ls` (per Mac; `closed` = you quit it, not resumed) |
+| Revive an agent you quit | `r` in its Rex pane · `hcx revive NAME` |
+| Stop tracking an agent | `f` in its Rex pane · `hcx forget NAME` (closes its pane) |
 | Start an agent | Rex: New Agent… · `hc run --bg --name N --cwd DIR [--on studio] -- omp` |
 | Look at / type into one | Rex tab · `hc attach N` (ctrl+\ detaches) · `hc-tui` |
 | Message it / answer it | `hc send N "…"` · `hc send --force N "…"` when blocked · `hc keys N 1` |

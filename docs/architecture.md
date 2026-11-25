@@ -33,9 +33,11 @@ Each Mac mirrors **only its own** agents into **its own** Rex server (`hcx rex-s
 - **MacBook:** `agents` session with a `board` tab (every agent on both Macs, live) and tabs for
   the MacBook's own agents.
 
-Tabs are labelled by space; panes by agent name. A pane closes on its own when its agent ends
-(`hc attach` exits). `rex-sync` opens panes for new agents (beside their space's panes) and
-closes panes it made for agents that are gone. Panes you move stay where you put them.
+Tabs are labelled by space; panes by agent name. Each pane runs `hcx view NAME`: `hc attach`
+while the agent runs; when it ends (you quit omp, or it died), the pane stays and offers
+**r** revive (same conversation and command line), **f** forget (closes the pane), **q** close.
+Panes follow hcx's records: `rex-sync` opens one for every recorded agent here (beside its
+space's panes) and closes panes it made for agents you forgot. Panes you move stay put.
 
 ## Data flows
 
@@ -55,7 +57,8 @@ core directly. `hc send` waits for a draft you're typing; `--force` types into a
 - `argv`: the terminal's command minus resume flags, so `--model …` and `env VAR=…` survive.
 On the first `tick` after a boot, `hcx resume` restarts every recorded agent that isn't live
 with `--restore=SESSION` (or `--continue` if no file was recorded yet). An agent that exits with
-code 0 (you quit it) is forgotten; one that dies (reboot, kill) is resumed.
+code 0 (you quit it) is kept but marked `closed`: not resumed after a reboot, revivable from its
+pane or `hcx revive NAME`. One that dies (reboot, kill, crash) is resumed.
 
 ## Lifecycle
 
