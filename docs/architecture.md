@@ -42,6 +42,13 @@ while the agent runs; when it ends (you quit omp, or it died), the pane stays an
 Panes follow hcx's records: `rex-sync` opens one for every recorded agent here (beside its
 space's panes) and closes panes it made for agents you forgot. Panes you move stay put.
 
+**Which agents.** hcx records and resumes only top-level omp agents (it knows how to restart
+them). Every other live agent on the Mac also gets a pane and a board row, but isn't recorded
+or resumed: helpers another agent started with `hc run` (hc's `parent`; the pane goes in the
+parent's space tab, the board shows `↳ name … of parent`) and agents that aren't omp (claude,
+codex, … by hc's `agent` field, or any program reporting a status). Their pane closes when they
+end. Plain scripts an agent runs (watchers) aren't agents and get neither.
+
 ## Data flows
 
 **Status.** omp reports OSC 7501 → hc records it (`hc get .status`, `hc events`) →

@@ -193,7 +193,7 @@ cmd_view() {
       continue
     fi
     load | jq -e --arg n "$name" 'any(.[]; .name == $n)' >/dev/null \
-      || { printf '%s is no longer recorded.\n' "$name"; sleep 2; return 0; }
+      || { printf '%s ended (hcx resumes only top-level omp agents).\n' "$name"; sleep 2; return 0; }
     why=$("$HC" ls --all --json | jq -r --arg n "$name" '
       [.terminals[] | select(.name == $n and .state != "live")] | last
       | if . == null then "is not running" elif .exit_code == 0 then "was quit"
@@ -208,21 +208,36 @@ cmd_view() {
   done
 }
 
-# Live top-level omp terminals on EVERY machine this core sees (this one and `hc machine add`
-# ones), with their reported status: [{address, name, cwd, machine, space, state, msg}].
+# Programs that are agents even before they report a status (OSC 7501).
+AGENT_PROGRAMS='["omp","pi","claude","codex","gemini","opencode","amp","cursor-agent","grok","droid","crush","aider","goose"]'
+
+# Live agents on EVERY machine this core sees (this one and `hc machine add` ones), with their
+# reported status: [{address, name, cwd, machine, space, state, msg, parent, parent_name}].
+# An agent is a terminal running a known agent program, or any program reporting a status:
+# top-level omp agents (which hcx records and resumes) and also agents other agents started
+# (`parent`) or that aren't omp (claude, codex…), which are shown but not resumed.
 # `space` is the hcx label the agent's own machine gave it (its folder's name until then).
+# --local: only this machine's.
 all_agents() {
+  local only_local=false
+  [ "${1:-}" = --local ] && only_local=true
+  # hc's `agent` names the program (claude's process calls itself by its version, so not that).
   "$HC" ls --json \
-    | jq -r '.terminals[] | select(.state == "live" and .agent == "omp") | .address' \
-    | while IFS= read -r a; do
-        "$HC" get "$a" --json 2>/dev/null | jq -c --arg a "$a" '
-          select(.error == null and .state == "live" and .parent == null) | {
-            address: $a, name, cwd,
-            machine: (if ($a | contains("/")) then ($a | split("/")[0]) else "local" end),
+    | jq -r --argjson local "$only_local" '.terminals[] | select(.state == "live")
+        | select(($local | not) or (.address | contains("/") | not)) | "\(.address)\t\(.agent // "")"' \
+    | while IFS=$'\t' read -r a program; do
+        "$HC" get "$a" --json 2>/dev/null | jq -c --arg a "$a" --arg program "$program" --argjson programs "$AGENT_PROGRAMS" '
+          select(.error == null and .state == "live")
+          | select(.status != null or ($programs | index($program)))
+          | (if ($a | contains("/")) then ($a | split("/")[0]) else "local" end) as $m | {
+            address: $a, name, cwd, machine: $m,
             space: (.labels.space // (.cwd | split("/") | map(select(. != "")) | last // "agents")),
-            state: (.status.state // null), msg: (.status.msg // null)}' || true
+            state: (.status.state // null), msg: (.status.msg // null),
+            parent: (if .parent == null then null elif $m == "local" or (.parent | contains("/")) then .parent
+                     else $m + "/" + .parent end)}' || true
       done \
-    | jq -sc .
+    | jq -sc '. as $all | map(. + {parent_name: (.parent as $p
+        | if $p == null then null else ([$all[] | select(.address == $p) | .name] | first) end)})'
 }
 
 # The Rex pane label for an agent: its name, prefixed with its machine unless it's this one.
@@ -254,9 +269,18 @@ cmd_rex_sync() {
   local cmd=()
   self=$(command -v hcx || echo "$0")
   # Wanted panes, in order: [{label, group, cmd: [argv]}] for every agent hcx records here
-  # (snapshot runs first in tick, so every live agent here is recorded by now).
-  want=$(load | jq -c --arg hcx "$self" 'sort_by(.space, .name)
-    | map({label: .name, group: .space, cmd: [$hcx, "view", .name]})')
+  # (snapshot runs first in tick, so every live agent here is recorded by now), then for this
+  # Mac's other live agents: ones agents started (in their parent's space) and non-omp ones.
+  # Those aren't recorded or resumed; their pane closes when they end.
+  local records; records=$(load)
+  want=$(all_agents --local | jq -c --argjson rec "$records" --arg hcx "$self" '
+    ($rec | map({key: .name, value: .space}) | from_entries) as $space
+    | ($rec | sort_by(.space, .name) | map({label: .name, group: .space, cmd: [$hcx, "view", .name]}))
+      + ([.[] | select((.name // .address) as $n | $space | has($n) | not)
+          | {label: (.name // .address),
+             group: ((.parent_name // "" | $space[.]) // .space),
+             cmd: [$hcx, "view", (.name // .address)]}]
+         | sort_by(.group, .label))')
   if [ "${HCX_BOARD:-0}" = 1 ]; then
     want=$(jq -c --arg hcx "$(command -v hcx || echo "$0")" '[{label: "board", group: "board", cmd: [$hcx, "board"]}] + .' <<<"$want")
   fi
@@ -338,7 +362,7 @@ cmd_board() {
       | ($h + (" " * ([$w - ($h | length) - 9, 1] | max)) + $now),
         (" " + ("─" * ([$w - 2, 10] | max))),
         (sort_by(rank, .machine, (.name // .address))[]
-          | "\u001b[\(color)m \(icon) \((.state // "—") | pad(8))\u001b[0m \(.machine | pad(8)) \((.name // .address) | pad(18)) \((.cwd // "" | sub("^" + $home; "~")) | pad(26)) \(.msg // "")"
+          | "\u001b[\(color)m \(icon) \((.state // "—") | pad(8))\u001b[0m \(.machine | pad(8)) \(((if .parent_name then "↳ " else "" end) + (.name // .address)) | pad(18)) \((.cwd // "" | sub("^" + $home; "~")) | pad(26)) \((if .parent_name then "of \(.parent_name) · " else "" end) + (.msg // ""))"
           | .[:($w + 12)]),
         (if length == 0 then "   no agents running" else empty end),
         (" " + ("─" * ([$w - 2, 10] | max))),

@@ -67,7 +67,8 @@ local function pick_agent(title, keep)
       by[a.address] = a
       items[#items + 1] = {
         id = a.address, title = label_of(a), icon = "terminal", detail = a.state or "",
-        subtitle = short(a.cwd) .. (a.msg and ("  ·  " .. a.msg) or ""),
+        subtitle = (a.parent_name and ("↳ of " .. a.parent_name .. "  ·  ") or "") .. short(a.cwd)
+          .. (a.msg and ("  ·  " .. a.msg) or ""),
       }
     end
   end

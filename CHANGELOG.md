@@ -1,6 +1,10 @@
 # Changelog
 
 ## 2026-11-26
+- Helpers other agents start (hc `parent`) and non-omp agents (claude, codex…) now get a Rex
+  pane in their parent's space tab and a board row (`↳ name … of parent`); before, only
+  top-level omp agents did. They aren't recorded or resumed. Terminals labelled `hcx.skip=1`
+  (the canary's) are never adopted.
 - `hcx restart-idle [--check REGEX] [NAME…]`: /restart agents in place once each is idle, to
   load new omp extensions or skills (replaces sending `/restart` by hand).
 - `scripts/rollout` refuses a Mac whose flake has commits its running system wasn't built from.

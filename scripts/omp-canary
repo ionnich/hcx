@@ -106,7 +106,8 @@ note "binary: $("$TMP/omp" --version 2>&1 | head -1) (installed: $(omp --version
 # --- 2. Start it as an agent would run.
 touch "$TMP/started"
 argv=("$TMP/omp"); [ -n "${CANARY_MODEL:-}" ] && argv+=(--model "$CANARY_MODEL")
-"$HC" run --bg --name "$NAME" --cwd "$WORK" -- "${argv[@]}" >/dev/null || { echo "hc run failed"; exit 1; }
+# hcx.skip: hcx never adopts it (a tick racing the cleanup would leave a record and a Rex pane).
+"$HC" run --bg --name "$NAME" --cwd "$WORK" --label hcx.skip=1 -- "${argv[@]}" >/dev/null || { echo "hc run failed"; exit 1; }
 end=$(( $(date +%s) + 60 ))
 until [ "$("$HC" get "$NAME" --json 2>/dev/null | jq -r '(.status|objects|.app) // empty')" = omp ] || [ "$(date +%s)" -gt "$end" ]; do sleep 2; done
 sleep 3
