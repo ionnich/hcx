@@ -1,6 +1,10 @@
 # Changelog
 
 ## 2026-11-26
+- The board no longer exits when an `hc` call fails (a core restarting, another Mac's core
+  unreachable): it keeps the last list and retries on the next event. Before, Rex closed its
+  pane and every tick reopened it, logging `jq: error … Cannot iterate over null` from the
+  empty `agents` session.
 - Helpers other agents start (hc `parent`) and non-omp agents (claude, codex…) now get a Rex
   pane in their parent's space tab and a board row (`↳ name … of parent`); before, only
   top-level omp agents did. They aren't recorded or resumed. Terminals labelled `hcx.skip=1`

@@ -297,7 +297,7 @@ cmd_rex_sync() {
     views=$(jq -c --arg b "$blk" --arg l "$label" '. + {($b): $l}' <<<"$views")
     printf 'rex: new session %s with %s\n' "$REX_SESSION" "$label"
   fi
-  blocks=$("${R[@]}" api call -s "$sid" session.list_blocks '{}' | jq -c '[.blocks[] | {block_id, label, window_id}]')
+  blocks=$("${R[@]}" api call -s "$sid" session.list_blocks '{}' | jq -c '[(.blocks // [])[] | {block_id, label, window_id}]')
   # Forget views whose tabs are gone (agent ended, or you closed the tab).
   views=$(jq -c --argjson b "$blocks" 'with_entries(select(.key as $k | $b | any(.block_id == $k)))' <<<"$views")
   # Close the tabs hcx made for agents that are no longer live on any machine.
@@ -312,7 +312,7 @@ cmd_rex_sync() {
     "${R[@]}" api call -s "$sid" session.set_window_label "$(jq -cn --arg w "$x" --arg l "$group" '{window_id: $w, label: $l}')" >/dev/null 2>&1 || true
   done < <("${R[@]}" api call -s "$sid" session.view '{}' | jq -r --argjson b "$blocks" --argjson w "$want" '
     ($w | map({key: .label, value: .group}) | from_entries) as $g
-    | .windows[] | .window_id as $id | .label as $cur
+    | (.windows // [])[] | .window_id as $id | .label as $cur
     | [$b[] | select(.window_id == $id) | $g[.label]] as $gs
     | select(($gs | length) > 0 and all($gs[]; . != null) and ($gs | unique | length) == 1 and $gs[0] != $cur)
     | [$id, $gs[0]] | @tsv')
@@ -347,7 +347,7 @@ cmd_rex_sync() {
 # A live list of every agent on every machine this core sees, redrawn on each hc event.
 # It's text only: status reaches Rex through each agent's own view, so the board reports none.
 cmd_board() {
-  local agents line type rc cols=0
+  local agents line type rc x cols=0
   width() { local r c; read -r r c < <(/bin/stty size </dev/tty 2>/dev/null) || c=100; echo "${c:-100}"; }
   render() {
     cols=$(width)
@@ -368,26 +368,31 @@ cmd_board() {
         (" " + ("─" * ([$w - 2, 10] | max))),
         "  cmd+shift+a agents · cmd+shift+b answer blocked · cmd+shift+space hc-tui"' <<<"$agents"
   }
+  # A failed read (the core restarting, another Mac's core unreachable) keeps the last list:
+  # under set -e it would end the board, and Rex closes a pane whose program exits.
+  refresh() { local x; if x=$(all_agents); then agents=$x; fi; }
   agents='[]'
   while :; do
-    agents=$(all_agents); render
+    refresh; render || true
     # Status changes update in place; anything else (an agent started, ended, moved) re-reads the
     # list. Every 2 s without events, redraw if the pane changed width.
     while :; do
       if IFS= read -r -t 2 line; then
-        type=$(jq -r '.params.type // empty' <<<"$line")
+        type=$(jq -r '.params.type // empty' <<<"$line" 2>/dev/null) || continue
         case "$type" in
           status)
-            agents=$(jq -c --argjson e "$(jq -c .params <<<"$line")" '
-              map(if .address == $e.terminal then .state = ($e.data.status.state // null) | .msg = ($e.data.status.msg // null) else . end)' <<<"$agents") ;;
-          created|finished|foreground|labels|removed|machine*) agents=$(all_agents) ;;
+            if x=$(jq -c '.params' <<<"$line") && x=$(jq -c --argjson e "$x" '
+              map(if .address == $e.terminal then .state = ($e.data.status.state // null) | .msg = ($e.data.status.msg // null) else . end)' <<<"$agents"); then
+              agents=$x
+            fi ;;
+          created|finished|foreground|labels|removed|machine*) refresh ;;
           *) continue ;;
         esac
-        render
+        render || true
       else
         rc=$?
         [ "$rc" -gt 128 ] || break   # 1 = the event stream ended
-        [ "$(width)" = "$cols" ] || render
+        [ "$(width)" = "$cols" ] || render || true
       fi
     done < <("$HC" events --json 2>/dev/null)
     sleep 2   # the core restarted or the stream dropped: start over
