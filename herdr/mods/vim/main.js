@@ -6,7 +6,15 @@
 
 import { View, div } from "gpui-kit";
 import { v_flex, h_flex } from "gpui-base";
-import { agents, focused, panes, run, theme, props, closeOverlay } from "herdr";
+import { agents, focused, panes, run, theme, props, closeOverlay, shared, setShared } from "herdr";
+
+// Recent agents for ctrl-o (mods/alt): newest first, two addresses.
+const RECENT = "hcx.agents.recent";
+function remember(address) {
+  const recent = shared(RECENT) ?? [];
+  if (!address || recent[0] === address) return;
+  setShared(RECENT, [address, ...recent.filter((a) => a !== address)].slice(0, 2));
+}
 
 // Keys in Normal mode. A value is a command (`name` or `name:arg`), or a function.
 const NORMAL = {
@@ -132,6 +140,7 @@ export default class Normal extends View {
   render() {
     const t = theme();
     const here = focused();
+    remember(here?.agent);
     const agent = here?.terminal ? agents().find((a) => a.address === here.terminal || a.address === here.agent) : null;
     const pane = here?.pane ? panes().find((p) => p.pane === here.pane) : null;
     const name = agent?.tab_name || pane?.name || pane?.title || "—";
