@@ -17,7 +17,7 @@ days); everything here lives in this repo under `herdr/` and is put in place by 
 
 | Key | Does |
 |---|---|
-| `ctrl-\` `ctrl-n` (in a terminal) | enter Normal mode (Neovim's terminal-mode exit) |
+| `ctrl-\` `ctrl-n` or `ctrl-j` `ctrl-k` (in a terminal) | enter Normal mode (the first is Neovim's terminal-mode exit) |
 | `i`, `a`, Enter, Esc | back to Insert mode: typing goes to the agent |
 | `h` `j` `k` `l` | pane left / down / up / right |
 | `J` / `K` | next / previous agent |

@@ -29,9 +29,11 @@ merge() { # merge FILE JQ_FILTER
 [ -f "$home/settings.json" ] || echo '{}' >"$home/settings.json"
 merge "$home/settings.json" '. + {theme: "everforest-dark-medium", font: "Maple Mono NF", font_size: 16, ui_font: "Maple Mono NF"}'
 [ -f "$home/keys.json" ] || { echo "no keys.json yet in $home (open Herdr once first)"; exit 1; }
-merge "$home/keys.json" '.terminal = ((.terminal // {}) + {"ctrl-\\ ctrl-n": "mod.open:vim"})'
+# Normal mode: ctrl-\ ctrl-n (Neovim's terminal-mode exit) or ctrl-j ctrl-k. A lone ctrl-j still
+# reaches the program (newline) once Herdr sees no ctrl-k after it.
+merge "$home/keys.json" '.terminal = ((.terminal // {}) + {"ctrl-\\ ctrl-n": "mod.open:vim", "ctrl-j ctrl-k": "mod.open:vim"})'
 
 for f in settings keys; do
   [ -e "$home/$f.error" ] && { echo "Herdr rejected $f.json: $(cat "$home/$f.error")"; exit 1; }
 done
-echo "applied to $home: theme everforest-dark-medium, Maple Mono NF, mods/vim, ctrl-\\ ctrl-n"
+echo "applied to $home: theme everforest-dark-medium, Maple Mono NF, mods/vim, ctrl-\\ ctrl-n and ctrl-j ctrl-k"
