@@ -8,12 +8,22 @@ import { View, div } from "gpui-kit";
 import { v_flex, h_flex } from "gpui-base";
 import { agents, focused, panes, run, theme, props, closeOverlay, shared, setShared } from "herdr";
 
-// Recent agents for ctrl-o (mods/alt): newest first, two addresses.
+// Recent agents for ctrl-o: newest first, two addresses. Normal mode records each agent it shows,
+// so this is the agents you visited while it was open (not clicks in the sidebar).
 const RECENT = "hcx.agents.recent";
 function remember(address) {
   const recent = shared(RECENT) ?? [];
   if (!address || recent[0] === address) return;
   setShared(RECENT, [address, ...recent.filter((a) => a !== address)].slice(0, 2));
+}
+// ctrl-o: back to the previous agent, like Neovim's alternate buffer. By pane, not
+// agent.select's position: that numbering differs from agents() order.
+function alternate() {
+  const now = focused()?.agent ?? null;
+  const list = agents();
+  const target = (shared(RECENT) ?? []).filter((a) => a !== now)
+    .map((a) => list.find((x) => x.address === a)).find(Boolean);
+  if (target) run("pane.focus", { pane: target.pane });
 }
 
 // Keys in Normal mode. A value is a command (`name` or `name:arg`), or a function.
@@ -31,6 +41,7 @@ const NORMAL = {
   "ctrl-y": { command: "terminal.scroll", args: { lines: -3 } },
   gg: { command: "terminal.scroll", args: { to: "top" } },
   G: { command: "terminal.scroll", args: { to: "bottom" } },
+  "ctrl-o": alternate,
 };
 for (let i = 1; i <= 9; i++) NORMAL[String(i)] = `agent.select:${i}`;
 
@@ -62,6 +73,7 @@ function token(e) {
 }
 
 function runAction(action) {
+  if (typeof action === "function") return action();
   if (typeof action === "string") {
     const at = action.indexOf(":");
     if (at < 0) return run(action);

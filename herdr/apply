@@ -3,9 +3,8 @@
 # ~/.config/herdr-app; HERDR_APP_HOME picks another). Idempotent; the app picks changes up live.
 #
 #   - themes/everforest-dark-medium.json   Ghostty's Everforest Dark Med palette, as a Herdr theme
-#   - mods/vim                              Normal mode + space leader (linked to this checkout,
-#                                           so edits here reload in the app)
-#   - mods/alt                              ctrl-o: back to the previous agent (alternate)
+#   - mods/vim                              Normal mode + space leader, ctrl-o = previous agent
+#                                           (linked to this checkout, so edits here reload)
 #   - settings.json                         theme, and Ghostty's font (Maple Mono NF 16) for
 #                                           terminals and panels
 #   - keys.json                             ctrl-\ ctrl-n / ctrl-j ctrl-k open Normal mode;
@@ -21,7 +20,6 @@ mkdir -p "$home/themes" "$home/mods"
 
 ln -sfn "$here/themes/everforest-dark-medium.json" "$home/themes/everforest-dark-medium.json"
 ln -sfn "$here/mods/vim" "$home/mods/vim"
-ln -sfn "$here/mods/alt" "$home/mods/alt"
 
 # Merge, never replace: the app and the person write these files too.
 merge() { # merge FILE JQ_FILTER
@@ -34,9 +32,9 @@ merge "$home/settings.json" '. + {theme: "everforest-dark-medium", font: "Maple 
 [ -f "$home/keys.json" ] || { echo "no keys.json yet in $home (open Herdr once first)"; exit 1; }
 # Normal mode: ctrl-\ ctrl-n (Neovim's terminal-mode exit) or ctrl-j ctrl-k. A lone ctrl-j still
 # reaches the program (newline) once Herdr sees no ctrl-k after it.
-merge "$home/keys.json" '.terminal = ((.terminal // {}) + {"ctrl-\\ ctrl-n": "mod.open:vim", "ctrl-j ctrl-k": "mod.open:vim"}) | .global = ((.global // {}) + {"ctrl-o": "mod.open:alt"})'
+merge "$home/keys.json" '.terminal = ((.terminal // {}) + {"ctrl-\\ ctrl-n": "mod.open:vim", "ctrl-j ctrl-k": "mod.open:vim"}) | del(.global["ctrl-o"])'
 
 for f in settings keys; do
   [ -e "$home/$f.error" ] && { echo "Herdr rejected $f.json: $(cat "$home/$f.error")"; exit 1; }
 done
-echo "applied to $home: theme everforest-dark-medium, Maple Mono NF, mods/vim + alt, ctrl-\\ ctrl-n / ctrl-j ctrl-k, ctrl-o"
+echo "applied to $home: theme everforest-dark-medium, Maple Mono NF, mods/vim, ctrl-\\ ctrl-n / ctrl-j ctrl-k"

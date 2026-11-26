@@ -21,7 +21,7 @@ days); everything here lives in this repo under `herdr/` and is put in place by 
 | `i`, `a`, Enter, Esc | back to Insert mode: typing goes to the agent |
 | `h` `j` `k` `l` | pane left / down / up / right |
 | `J` / `K` | next / previous agent |
-| `ctrl-o` (anywhere, not only Normal mode) | back to the previous agent; again to return (`mods/alt`). Remembers agents you switched to with `ctrl-o` or while Normal mode was open, not clicks in the sidebar |
+| `ctrl-o` | back to the previous agent; again to return. Remembers agents visited while Normal mode was open, not clicks in the sidebar |
 | `H` / `L`, `gT` / `gt` | previous / next tab |
 | `[` / `]` | previous / next space |
 | `1`–`9` | agent by position |
