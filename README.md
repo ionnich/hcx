@@ -71,8 +71,10 @@ dofile(os.getenv("HOME") .. "/.config/rex/hcx.lua")
 
 ## Docs
 
+- [Setup from scratch](docs/setup.md): every step to rebuild both Macs, in order.
 - [Architecture](docs/architecture.md): components, where things run, data flows, lifecycle.
-- [Operations](docs/operations.md): install, update, day-to-day commands, the module's options.
+- [Operations](docs/operations.md): the module's options, day-to-day commands (incl.
+  `hcx restart-idle`), bumping hc-tui.
 - [Maintenance](docs/maintenance.md): check / rollout / status scripts, tested versions,
   upgrading each component, the smoke test, adding a Mac.
 - [Migrating from Herdr TUI](docs/migrating-from-herdr.md): moving live agents and teams.
