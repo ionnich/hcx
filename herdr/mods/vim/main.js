@@ -75,10 +75,20 @@ export default class Normal extends View {
     this.handle = cx.focus_handle();
     this.handle.focus();
     // Commands can move focus (pane.go focuses the pane): take the keyboard back each time.
+    this.grabUntil = Date.now() + 300;
     cx.timer.after(50, () => this.handle.focus());
+    // If focus leaves the bar for good (a click into a terminal, another window), leave Normal
+    // mode: otherwise the overlay lingers and later keys, Space included, land here, not the agent.
+    this.watch = () => {
+      if (this.closed) return;
+      if (!this.handle.is_focused() && Date.now() > this.grabUntil) return this.insert();
+      cx.timer.after(200, this.watch);
+    };
+    cx.timer.after(400, this.watch);
   }
 
   insert() {
+    this.closed = true;
     closeOverlay(props().overlay);
   }
 
@@ -115,6 +125,7 @@ export default class Normal extends View {
     }
     if (leaves) return this.insert();
     cx.notify();
+    this.grabUntil = Date.now() + 300;
     cx.timer.after(30, () => this.handle.focus());
   }
 
