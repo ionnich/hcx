@@ -17,6 +17,8 @@
 #   hcx forget NAME    stop resuming NAME and close its pane
 #   hcx ls             show recorded agents (`closed` = you quit it)
 #   hcx fit PID|TTY|--rex-block SESSION BLOCK   make the hc terminal shown in that viewer take its size
+#   hcx restart-idle [--check REGEX] [NAME...]  /restart each agent (default: all recorded) once
+#                  it's idle, to load new omp extensions/skills; logs to restart-idle.log
 #
 # Any omp running as an hc terminal's own program is adopted, however it was
 # started (hc-tui, the Herdr app, Heeler, hcx start). Keep it that way: no shell
@@ -386,6 +388,58 @@ cmd_tick() {
 cmd_forget() { [ $# -eq 1 ] || die "usage: hcx forget NAME"; load | jq --arg n "$1" 'map(select(.name != $n))' | save; }
 cmd_ls() { load | jq -r '.[] | [.space, .name, (if .closed then "closed" else "open" end), .cwd, (.session // "-")] | @tsv'; }
 
+# Restart agents in place (omp's /restart: same pid, terminal and conversation) the next time
+# each is idle with no subagents or background jobs running, so they load new omp extensions or
+# skills. omp reads both only when it starts; /reload doesn't load new extension code.
+# --check REGEX: done when the agent's status area matches it (e.g. a new plugin's status line);
+# without it, done once /restart was taken (the agent didn't start working on it as a prompt).
+cmd_restart_idle() {
+  local check="" hours=24 pending="" left n st pid before after deadline
+  while [ $# -gt 0 ]; do
+    case $1 in
+      --check) check=$2; shift 2 ;;
+      --hours) hours=$2; shift 2 ;;
+      -*) die "usage: hcx restart-idle [--check REGEX] [--hours N] [NAME...]" ;;
+      *) pending="$pending $1"; shift ;;
+    esac
+  done
+  [ -n "$pending" ] || pending=$(load | jq -r '.[] | select(.closed | not) | .name' | tr '\n' ' ')
+  deadline=$(( $(date +%s) + hours * 3600 ))
+  local log="$STATE_DIR/restart-idle.log"
+  say() { printf '%s %s\n' "$(date '+%F %T')" "$*" | tee -a "$log"; }
+  busy() { "$HC" read "$1" --lines 25 2>/dev/null | grep -qE 'Subagents · [0-9]+ running|waiting on [0-9]+ job|bg_[0-9]+ ·'; }
+  matches() { [ -n "$check" ] && "$HC" read "$1" --lines 8 2>/dev/null | grep -qE "$check"; }
+  say "start:$pending"
+  while [ -n "${pending// /}" ] && [ "$(date +%s)" -lt "$deadline" ]; do
+    left=""
+    for n in $pending; do
+      [ "$("$HC" get "$n" --json 2>/dev/null | jq -r .state)" = live ] || { say "$n: not running, dropped"; continue; }
+      if matches "$n"; then say "OK $n: already matches"; continue; fi
+      st=$("$HC" get "$n" --json | jq -r '(.status|objects|.state) // "-"')
+      if { [ "$st" = idle ] || [ "$st" = done ]; } && ! busy "$n"; then
+        pid=$("$HC" get "$n" --json | jq -r '.foreground.pid // empty')
+        before=$(ps -o command= -p "$pid" 2>/dev/null)
+        "$HC" send "$n" /restart >/dev/null
+        sleep 25
+        after=$(ps -o command= -p "$pid" 2>/dev/null)
+        st=$("$HC" get "$n" --json | jq -r '(.status|objects|.state) // "-"')
+        if [ -n "$check" ]; then
+          if matches "$n"; then say "RESTARTED $n"; continue; fi
+        elif [ "$st" != working ] && { [ "$after" != "$before" ] || grep -q -- '--restore' <<<"$after"; }; then
+          say "RESTARTED $n"; continue
+        fi
+        # Most often: /restart landed on the end of a half-delivered hc message and went in as text.
+        say "RETRY $n: /restart not confirmed (status $st)"
+      fi
+      left="$left $n"
+    done
+    pending=$left
+    [ -n "${pending// /}" ] && sleep 60
+  done
+  [ -n "${pending// /}" ] && say "GAVE UP after ${hours}h:$pending"
+  say "done"
+}
+
 # A terminal has one size and the last viewer to send a resize wins. Re-sending the same size
 # does nothing (`hc attach` drops it), so shrink the viewer's terminal by one row and restore it.
 # The pause keeps `hc attach` from merging the two changes into none. Uses macOS's /bin/stty:
@@ -429,5 +483,6 @@ case "$sub" in
   agents) cmd_agents "$@" ;;
   board) cmd_board ;;
   fit) cmd_fit "$@" ;;
-  *) sed -n '2,27p' "$0" | sed 's/^# \{0,1\}//'; exit 2 ;;
+  restart-idle) cmd_restart_idle "$@" ;;
+  *) sed -n '2,29p' "$0" | sed 's/^# \{0,1\}//'; exit 2 ;;
 esac

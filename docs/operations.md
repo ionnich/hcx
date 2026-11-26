@@ -1,27 +1,8 @@
 # Operations
 
-## Install on a Mac
+## Install
 
-1. **Herdr app and core:** `curl -fsSL https://releases.herdr.dev/app/install.sh | sh`. Installs
-   `~/Applications/Herdr.app` and `~/.local/bin/{hc,herdr-core}` (signed bundle). Both update
-   themselves.
-2. **Rex.app:** from Rex's site. `~/.local/bin/rex` links to the CLI inside the app.
-3. **omp** in `~/.local/bin/omp`, version ≥ 18.8.7 (it must report status via OSC 7501).
-4. **This repo**, checked out at `~/code/hcx` (`git clone git@github.com:ionnich/hcx ~/code/hcx`).
-5. **The module** in the Mac's nix-darwin flake:
-
-   ```nix
-   inputs.hcx.url = "git+file:///Users/nich/code/hcx";
-   # in the host:
-   imports = [ inputs.hcx.darwinModules.default ];
-   services.hcx = { enable = true; /* options below */ };
-   ```
-
-   A `git+file` input reads the local checkout, so nothing needs network or GitHub access while
-   `darwin-rebuild` runs as root.
-6. **The MacBook only:** `hc machine add studio` (its core then lists the Studio's agents), and in
-   `~/.config/rex/init.lua`: `dofile(os.getenv("HOME") .. "/.config/rex/hcx.lua")`, then
-   `rex config reload`.
+From scratch, both Macs: [setup.md](setup.md). The module's options are below.
 
 ## The module's options (`services.hcx.*`)
 
@@ -67,7 +48,7 @@ launchd jobs: `org.nixos.hcx` (every 60 s, log `/tmp/hcx_<user>.log`), `org.nixo
 | Run the sync now | `hcx tick` (or `launchctl kickstart gui/$(id -u)/org.nixos.hcx`) |
 | Fit a view that looks the wrong size | click the pane (Rex refits on focus) · `cmd+shift+f` · `hcx fit PID\|TTY` |
 | Move an agent off Herdr TUI | `hcx-migrate-herdr --name N` (see migrating-from-herdr.md) |
-| Load new omp extensions into a running agent | when it's idle: `hc send N /restart`. omp re-execs in place (same pid, terminal and children) on the same conversation; check `ps -o command= -p PID` now shows `--restore`. `/reload` does not load new extension code. If an hc message is half-delivered, `/restart` can land at the end of it and get sent as text; send it again. |
+| Load new omp extensions or skills into running agents | `hcx restart-idle [--check REGEX] [NAME…]` on the agents' Mac (no names: every recorded agent). Each gets omp's `/restart` once it's idle with no subagents or background jobs: same pid, terminal, children and conversation. `--check` confirms by the agent's status line (e.g. `'gh [0-9.]+k?/[0-9.]+k'` for ghwatch). Long waits: `nohup hcx restart-idle … &`; progress in `~/.local/state/hcx/restart-idle.log`. `/reload` does not load new extension code. |
 
 ## Bump hc-tui
 

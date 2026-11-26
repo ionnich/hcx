@@ -1,0 +1,14 @@
+{
+  "agents": {
+    "lakehouse-main": { "tag": "Main", "names": ["Main", "lakehouse-main", "lakehouse main"], "roles": ["lakehouse owner"] },
+    "scaleup-lead":   { "tag": "scaleup-lead", "names": ["scaleup lead"] },
+    "eg-lead":        { "tag": "EG", "names": ["EG lead", "eg-lead"] },
+    "newsflow-lead":  { "tag": "newsflow", "names": ["newsflow-lead", "newsflow lead"] },
+    "runtime-lead":   { "tag": "runtime", "names": ["runtime-lead", "runtime lead"] },
+    "deck-lead":      { "tag": "deck-lead", "names": ["deck lead"] },
+    "joewrites-lead": { "tag": "joewrites-lead", "names": ["joewrites", "joewrites lead", "Joe Writes lead"] },
+    "jw-api-lead":    { "tag": "jw-api-lead", "names": ["jw api lead"] },
+    "jw-attest-lead": { "tag": "jw-attest-lead", "names": ["jw attest lead"] }
+  },
+  "tzOffsetMinutes": 480
+}

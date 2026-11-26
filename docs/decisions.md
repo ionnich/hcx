@@ -57,3 +57,34 @@ Why the setup is the way it is. Each entry: decision, reasons, evidence, what wo
 ## 11. Rex actions are a file the user's init.lua loads
 - **Why:** the user keeps their own Rex config; `dofile` keeps hcx's actions separate and
   versioned here.
+
+## 12. omp plugins use only the extension API
+- **Why:** omp updates every few days. The two breaks so far came from going around the API:
+  hc-notes imported pi-tui's `Container`/`Text` (gone in 19.2), and orbitals replaced the
+  built-in `ask` tool, whose schema became an HTML form in 19. Plugins here draw with rows
+  objects, import nothing from `@oh-my-pi/*` internals, and feature-check optional UI.
+- **Check:** `scripts/omp-canary VERSION` runs a release against every plugin before agents get it.
+
+## 13. Agent-to-agent messages, names and guards are omp plugins, not hc changes
+- **Why:** hc is the upstream runtime; `<hc from>` rendering (hc-notes), session names Heeler
+  shows (hc-name) and refusing the herdr CLI / killing others' terminals (hc-guard) are the
+  agent's behaviour, so they live where the agent runs and change without touching hc.
+- **Not chosen:** `title.refreshOnReplan=false` globally (changes every omp, not just agents).
+
+## 14. The Herdr app is changed through mods, not a fork
+- **Why:** the app ships every 2–4 days and its hot files are 5–8k lines; a fork means constant
+  rebases and losing its updates. Theme, settings, keys and a JS mod cover the look and a
+  Normal mode. The limits are written down (docs/herdr-app.md).
+
+## 15. GitHub watching is one daemon per Mac, delivered through omp (ghwatch)
+- **Why:** shell watchers broke four ways in a week (silent filter, rate limit, exit after first
+  hit, killed in the hc move) and burned the shared token. One poller per token with ETags and
+  GraphQL, health that turns red, watches owned by agent name that survive restarts.
+- **Choices (user, 2026-11-26):** daemon on demand (not launchd); idle agents wake for any matching
+  event; identities from each agent's own signature; agents learn it from a skill, not a message.
+
+## 16. Rollouts never apply someone else's pending config
+- **Why:** a rebuild applies the whole flake. On 2026-11-26 an hcx rollout started building
+  another agent's unapplied three-month nixpkgs update on the Studio; it was killed before the
+  switch. `scripts/rollout` now refuses a Mac whose flake HEAD isn't what the running system was
+  built from.

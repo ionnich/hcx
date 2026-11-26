@@ -8,7 +8,7 @@ How to keep the hybrid setup healthy over time. Day-to-day commands are in
 | Script | When | What |
 |---|---|---|
 | `scripts/check` | before every commit; CI runs it on push | Static checks: bash syntax and shellcheck, Lua syntax and `rex config check` of the actions, Nix syntax, the omp extensions parse, hc-guard's decisions, resume-flag stripping. Touches no service. |
-| `scripts/rollout [machine]` | after `git push` | On each Mac: pull `~/code/hcx`, `nix flake update hcx`, rebuild, reload Rex actions, run a tick. Machines are listed at the top of the script. |
+| `scripts/rollout [machine]` | after `git push` | On each Mac: pull `~/code/hcx`, `nix flake update hcx`, rebuild, reload Rex actions, run a tick. Machines are listed at the top of the script. Refuses a Mac whose flake has commits the running system wasn't built from (someone else's pending change; a rebuild would apply it too). |
 | `scripts/status` | after a rollout or any upgrade; when something looks off | Read-only health per Mac: versions, launchd jobs, whether agents get the login PATH, recorded agents, Rex tabs. Flags a missing `hcx` (the active system isn't the one with `services.hcx`). |
 | `scripts/omp-canary VERSION [--on studio]` | before updating omp | Runs that omp release (downloaded, checksum-verified, into a temp folder) as a throwaway agent on this Mac's real `~/.omp/agent`, and checks every plugin: all extensions load, hc-notes draws a card, hc-name names the session, hc-guard refuses `herdr ls`, `/restart` re-execs in place, the orbitals suite plus a real `ask` answered on the board (Studio), ghwatch's tests. PASS/FAIL/SKIP per check; cleans up after itself. A few small model turns (`CANARY_MODEL=` picks the model). |
 
@@ -67,7 +67,7 @@ After any of these, run `scripts/status`, then the smoke test.
      `Container`/`Text`; ours now draw plain rows) or replacing a built-in tool whose schema
      changed (omp 19 made `ask` an HTML form; orbitals handles both).
   3. `omp update` on each Mac (`omp update --check` first).
-  4. Each agent `/restart`s when idle (operations.md, "Load new omp extensions").
+  4. `hcx restart-idle` on each Mac with agents: each `/restart`s when idle.
   Plugin rules that keep this cheap: use only the extension API (`pi.on(...)`, `pi.sendMessage`,
   `pi.registerMessageRenderer`, `pi.setSessionName`, the `{ block, reason }` tool-call result),
   draw with rows objects (`{ render(width): string[] }`), import nothing from `@oh-my-pi/*`

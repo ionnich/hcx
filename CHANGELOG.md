@@ -1,6 +1,12 @@
 # Changelog
 
 ## 2026-11-26
+- `hcx restart-idle [--check REGEX] [NAME…]`: /restart agents in place once each is idle, to
+  load new omp extensions or skills (replaces sending `/restart` by hand).
+- `scripts/rollout` refuses a Mac whose flake has commits its running system wasn't built from.
+- docs/setup.md: rebuild both Macs from scratch. `config/ghwatch/studio.json`: the Studio
+  agents' GitHub identities (installed with ghwatch's `scripts/install`). Decisions 12–16 and
+  new troubleshooting entries.
 - Herdr app, without a fork: `herdr/themes/everforest-dark-medium.json` (Ghostty's palette),
   Maple Mono NF, and the `vim` mod: `ctrl-\ ctrl-n` enters Normal mode (hjkl panes, J/K agents,
   tabs, spaces, scrolling, a space leader menu with hints). `herdr/apply` puts them in place.

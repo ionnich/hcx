@@ -7,6 +7,11 @@
 # For each machine: `git pull` its ~/code/hcx checkout, `nix flake update hcx` in its system
 # flake, rebuild, then reload the Rex actions where they're loaded. Run it from the MacBook
 # after `git push`. Edit MACHINES when a Mac joins or its flake moves.
+#
+# A rebuild applies everything in that Mac's flake, not just hcx. So the rollout refuses a Mac
+# whose flake has commits the running system wasn't built from (someone else's change waiting
+# for its own `nixup`), and says what they are. HCX_ROLLOUT_FORCE=1 overrides, once you've
+# agreed with whoever made them.
 set -euo pipefail
 
 # name | how to reach it (local or an ssh host) | its system flake | rebuild command
@@ -26,6 +31,17 @@ for m in "${MACHINES[@]}"; do
   printf '== %s (%s), main at %s\n' "$name" "$host" "$rev"
   run_on "$host" "
     set -euo pipefail
+    # Refuse when the flake's HEAD isn't what the running system was built from.
+    if git -C '$flake' rev-parse HEAD >/dev/null 2>&1; then
+      built=\$(jq -r '.configurationRevision // empty' /run/current-system/darwin-version.json | sed 's/-dirty\$//')
+      head=\$(git -C '$flake' rev-parse HEAD)
+      if [ -n \"\$built\" ] && [ \"\$built\" != \"\$head\" ] && [ -z '${HCX_ROLLOUT_FORCE:-}' ]; then
+        echo \"refusing: $flake has commits the running system wasn't built from:\"
+        git -C '$flake' log --oneline \"\$built..\$head\" 2>/dev/null | sed 's/^/  /' || echo \"  (running \$built, HEAD \$head)\"
+        echo 'A rebuild would apply them too. Apply them first (nixup), or HCX_ROLLOUT_FORCE=1.'
+        exit 3
+      fi
+    fi
     git -C ~/code/hcx pull -q --ff-only
     git -C ~/code/hcx log --oneline -1
     cd '$flake' && nix flake update hcx 2>&1 | grep -E 'Updated|error' || true

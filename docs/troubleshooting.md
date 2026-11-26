@@ -70,3 +70,29 @@ agent started less than a minute before the reboot may not be recorded.
 **Cause:** the Studio's fish has a non-interactive PATH without `~/.local/bin`.
 **Fix (done):** remote commands run as `ssh studio env PATH="$HOME/.local/bin:…" hcx …`.
 Requires `rex hosts` to have an `ssh://` endpoint for the host.
+
+## `Failed to load extension …: Export named 'Container' not found`
+**Cause:** an extension imports classes omp's UI library dropped (19.2 rewrote pi-tui).
+**Fix:** draw with a rows object (`{ render(width): string[] }`) and import nothing from omp
+internals; see hc-notes. Run `scripts/omp-canary` before omp updates to catch this first.
+
+## `ask` fails: `undefined is not an object (evaluating 'params.questions.map')`
+**Cause:** an extension that replaces the built-in `ask` (orbitals) still reads the pre-19
+`questions` schema; omp 19 sends `{ html }`.
+**Fix (done in orbitals `b33c97d`):** it bridges HTML forms; the agent needs a `/restart` to load it.
+
+## An agent got `/restart` as a message instead of restarting
+**Cause:** `/restart` was typed while an hc message was still being delivered to it, so it landed
+on the end of that message (`…</hc>/restart`).
+**Fix:** send it again once the agent is idle; `hcx restart-idle` does this and retries.
+
+## `scripts/rollout` says "refusing: … has commits the running system wasn't built from"
+**Cause:** someone committed to that Mac's flake (`~/nix` on the Studio) without applying it; a
+rebuild would apply their change too.
+**Fix:** let them (or you) apply it first (`nixup` on the Studio), then roll out. Only with their
+agreement: `HCX_ROLLOUT_FORCE=1 scripts/rollout studio`.
+
+## A GitHub thread an agent cares about goes quiet
+**Cause:** an old shell watcher died or still calls `herdr agent prompt` (unreachable since the
+move to hc).
+**Fix:** move it to ghwatch (the `ghwatch` skill); `ghwatch_list` shows health, red when failing.
